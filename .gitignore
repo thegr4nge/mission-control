@@ -13,3 +13,6 @@ evals/results/*.json
 
 # crew mission transcripts (local)
 missions/
+
+# personal project instructions for Claude (kept local)
+CLAUDE.md
