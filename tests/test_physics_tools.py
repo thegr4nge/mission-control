@@ -213,3 +213,51 @@ def test_outer_planet_scans_respect_the_ephemeris_range():
     # de440s runs to 2150 and handles it.
     far = launch_opportunities("jupiter", "saturn", to_mjd2000("2045-01-01"), 1, ephemeris="de440s")
     assert far.opportunities and far.opportunities[0].best.arrive_mjd2000 <= 54780.0
+
+
+def _voyager_flybys(shift_saturn_days=0.0):
+    from physics.references import VOYAGER_2
+    bodies = list(VOYAGER_2)
+    t = [to_mjd2000(VOYAGER_2[b] + "T12:00") for b in bodies]
+    t[2] += shift_saturn_days
+    x = [t[0]] + [t[i + 1] - t[i] for i in range(len(t) - 1)]
+    seq = MgaProblem(bodies, 0.0, 1.0, [(0.0, 1.0)] * 4, arrival_mode="flyby").evaluate(x)
+    return seq.encounters[1:-1]
+
+
+def test_voyager_2_grand_tour_flybys_are_nearly_free_on_the_flown_dates():
+    """Voyager 2 (NSSDCA 1977-076A) flew Jupiter, Saturn and Uranus as gravity assists. On the recorded
+    days (noon UTC assumed), each patched-conic flyby needs under 2 % of its arrival v_inf in powered
+    dv: measured 1.6 % at Jupiter, 0.77 % at Saturn, 0.01 % at Uranus. Moving Saturn by 60 days costs
+    2.6-12 %, so the check discriminates."""
+    flown = _voyager_flybys()
+    assert [e.body for e in flown] == ["jupiter", "saturn", "uranus"]
+    for e in flown:
+        assert e.dv_km_s < 0.02 * e.vinf_in_km_s, (e.body, e.dv_km_s, e.vinf_in_km_s)
+    assert flown[2].dv_km_s < 0.01  # Uranus: essentially exact
+    shifted = _voyager_flybys(shift_saturn_days=60.0)
+    for a, b in zip(flown, shifted):
+        assert b.dv_km_s > 5 * a.dv_km_s, (a.body, a.dv_km_s, b.dv_km_s)
+
+
+def test_optimiser_finds_jupiter_assist_to_saturn():
+    """From Voyager's 1977 launch season, Earth-Jupiter-Saturn with a free Jupiter flyby beats the direct
+    route (measured 6.700 against 8.118 km/s)."""
+    t0, t1 = to_mjd2000("1977-07-01"), to_mjd2000("1977-10-31")
+    via = optimise_sequence(["earth", "jupiter", "saturn"], t0, t1, arrival_mode="flyby")
+    direct = optimise_sequence(["earth", "saturn"], t0, t1, arrival_mode="flyby")
+    assert via.encounters[1].dv_km_s < 0.01 and via.dv_total_km_s < direct.dv_total_km_s - 1.0
+
+
+def test_default_flyby_candidates_reach_outward():
+    from physics.flyby import default_flyby_candidates
+    assert "saturn" not in default_flyby_candidates("mars")
+    assert set(default_flyby_candidates("neptune")) >= {"jupiter", "saturn", "uranus"}
+
+
+def test_flyby_optimiser_reports_ephemeris_limits_instead_of_crashing():
+    """Earth-Jupiter-Neptune from 2045 cannot arrive before jpl_lp ends in 2050: a clear error, not a
+    pykep exception from inside the optimiser."""
+    with pytest.raises(ValueError, match="de440s"):
+        optimise_sequence(["earth", "jupiter", "neptune"], to_mjd2000("2045-01-01"), to_mjd2000("2045-06-01"),
+                          arrival_mode="flyby", seeds=1, generations=50)

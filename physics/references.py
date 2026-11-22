@@ -214,3 +214,20 @@ MARINER_10 = {
 }
 # The flight was ballistic apart from two small trajectory correction maneuvers
 # (about 10 days after launch, and 21 January 1974), magnitudes not given by NSSDCA.
+
+# ---------------------------------------------------------------------------
+# Voyager 2: Earth - Jupiter - Saturn - Uranus - Neptune, all gravity assists
+# ---------------------------------------------------------------------------
+
+VOYAGER_2_SOURCE = (
+    "NASA NSSDCA Master Catalog, Voyager 2 (1977-076A), "
+    "https://nssdc.gsfc.nasa.gov/nmc/spacecraft/display.action?id=1977-076A, read 2026-11-23"
+)
+# Dates of launch and closest approach as NSSDCA gives them (to the day; noon UTC is assumed).
+VOYAGER_2 = {
+    "earth": "1977-08-20",
+    "jupiter": "1979-07-09",
+    "saturn": "1981-08-26",
+    "uranus": "1986-01-24",
+    "neptune": "1989-08-25",
+}

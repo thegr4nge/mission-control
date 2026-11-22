@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
-from agents.model_adapter import ChatModel
+from agents.model_adapter import ChatModel, PhantomToolCall
 
 
 @dataclass
@@ -48,9 +48,19 @@ async def run_agent(model: ChatModel, call_tool: Callable[[str, dict], Awaitable
     """
     run = AgentRun()
     allowed = {t["function"]["name"] for t in tools}
+    phantoms = 0
     for turn in range(max_turns):
         run.turns = turn + 1
-        msg = model.chat(messages, tools)
+        try:
+            msg = model.chat(messages, tools)
+        except PhantomToolCall:
+            phantoms += 1
+            if phantoms > 2:
+                raise
+            hint = (f"You can only call these tools: {', '.join(sorted(allowed))}." if allowed
+                    else "You have no tools in this step. Reply in plain text only.")
+            messages.append({"role": "user", "content": hint})
+            continue
         calls = msg.get("tool_calls") or []
         for i, call in enumerate(calls):
             call["id"] = call.get("id") or f"call_{turn}_{i}"

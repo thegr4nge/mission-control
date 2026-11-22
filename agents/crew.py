@@ -76,7 +76,9 @@ PROPULSION_PROMPT = (
 BRIEFING_PROMPT = (
     "You are the flight director, now briefing the mission owner, a physicist. Using only the crew's reports and "
     "the tool results below, write the briefing (under 300 words): the recommended route with its key numbers, "
-    "what else the crew tried and the numbers that ruled it out, why the recommendation won, whether the spacecraft "
+    "what else the crew tried and the numbers that ruled it out, why the recommendation won including what it costs "
+    "in time of flight and launch energy against the alternatives (a lower delta-v that takes years longer is a "
+    "trade-off, not a free win), whether the spacecraft "
     "can fly it, and the model's limits (patched conics, impulsive burns). " + RULE
 )
 
@@ -177,9 +179,10 @@ async def fly(goal: str, model: ChatModel, session, say: Callable[[str, str], No
                 raise RoleFailed(f"{name}: {run.error}")
             turn.text = run.final_text.strip()
             ok = [r for r in m.all_tools() if r.ok]
-            # Sources: tool results, the crew's own search bounds, the goal, and today's date (which the crew is told).
-            _, bad = grounding(turn.text, [r.result_text for r in ok], f"{goal} Today is {today}.",
-                               [r.arguments for r in ok])
+            # Sources: tool results, the crew's own search bounds, the goal, today's date and the role's own
+            # instructions (which set things like the 10% margin), all of which the crew is told.
+            _, bad = grounding(turn.text, [r.result_text for r in ok],
+                               f"{goal} Today is {today}. {messages[0]['content']}", [r.arguments for r in ok])
             if not bad:
                 m.ungrounded.pop(name, None)
                 break

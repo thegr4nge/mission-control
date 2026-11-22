@@ -109,8 +109,15 @@ class MgaProblem:
         encounters.append(Encounter(self.bodies[-1], float(epochs[-1]), vinf / 1e3, None, dv / 1e3))
         return Sequence(self.bodies, tuple(encounters), self.arrival_mode)
 
+    # Returned for trajectories the ephemeris cannot evaluate (an encounter after jpl_lp's 2050 or
+    # de440s's 2150 limit), so the optimiser steers away from them instead of crashing.
+    OUT_OF_RANGE_PENALTY = 1.0e3
+
     def fitness(self, x):
-        return [self.evaluate(x).dv_total_km_s]
+        try:
+            return [self.evaluate(x).dv_total_km_s]
+        except ValueError:
+            return [self.OUT_OF_RANGE_PENALTY + float(np.sum(x[1:])) * 1e-3]
 
 
 def optimise_sequence(bodies, dep_start, dep_end, tof_bounds=None, arrival_mode="capture",
@@ -137,7 +144,19 @@ def optimise_sequence(bodies, dep_start, dep_end, tof_bounds=None, arrival_mode=
         pop = pg.algorithm(pg.sade(gen=generations, seed=seed)).evolve(pop)
         if pop.champion_f[0] < best_f:
             best_x, best_f = pop.champion_x, pop.champion_f[0]
+    if best_f >= MgaProblem.OUT_OF_RANGE_PENALTY:
+        raise ValueError(f"no {'-'.join(bodies)} trajectory found inside the {ephemeris} ephemeris's date range"
+                         + (" (jpl_lp ends in 2050; try ephemeris de440s, which runs to 2150)"
+                            if ephemeris == "jpl_lp" else ""))
     return udp.evaluate(best_x)
+
+
+def default_flyby_candidates(destination: str) -> tuple[str, ...]:
+    """Venus, Earth, Mars and Jupiter for any target; past Saturn, Saturn too (and Uranus for Neptune),
+    since the outer planets are mostly reached by assists from the giant planets inward of them."""
+    destination = check_planet(destination)
+    extra = {"uranus": ("saturn",), "neptune": ("saturn", "uranus")}.get(destination, ())
+    return DEFAULT_FLYBY_CANDIDATES + extra
 
 
 def candidate_sequences(origin: str, destination: str, candidates=DEFAULT_FLYBY_CANDIDATES,

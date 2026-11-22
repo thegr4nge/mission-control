@@ -242,3 +242,26 @@ def test_wrong_answers_fail():
     e = BY_ID["T01_window_2026"].expected
     assert not check_key(e["c3_km2_s2"], 9.144 * 1.02) and not check_key(e["departure_date"], "2026-11-05")
     assert not check_key(BY_ID["T10_window_constraint_binds"].expected["departure_date"], "2026-10-31")
+
+
+def test_phantom_tool_call_is_retried_with_a_reminder():
+    """gpt-oss sometimes calls a built-in tool it was not given; Groq rejects the turn with HTTP 400
+    tool_use_failed. The loop reminds the model and retries instead of failing the mission."""
+    from agents.loop import run_agent
+    calls = {"n": 0}
+
+    def handler(request):
+        calls["n"] += 1
+        body = json.loads(request.content)
+        if calls["n"] == 1:
+            return httpx.Response(400, json={"error": {"code": "tool_use_failed", "message": "Tool choice is none"}})
+        assert "plain text" in body["messages"][-1]["content"]
+        return httpx.Response(200, json={"choices": [{"message": {"role": "assistant", "content": "Brief."}}]})
+
+    model = ChatModel("groq", "scripted", transport=httpx.MockTransport(handler))
+
+    async def no_tool(name, args):
+        raise AssertionError("no tool should run")
+
+    run = anyio.run(lambda: run_agent(model, no_tool, [], [{"role": "user", "content": "go"}]))
+    assert run.final_text == "Brief." and calls["n"] == 2

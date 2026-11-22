@@ -58,6 +58,11 @@ class ModelError(RuntimeError):
     pass
 
 
+class PhantomToolCall(ModelError):
+    """The model tried to call a tool it was not given (gpt-oss reaches for its built-in browser and
+    python tools); the provider rejected the turn. The caller can retry with a plain-text reminder."""
+
+
 def simplify_schema(schema: dict[str, Any]) -> dict[str, Any]:
     """Make an MCP input schema acceptable to stricter function-calling dialects (Gemini).
 
@@ -156,5 +161,7 @@ class ChatModel:
                 time.sleep(min(max(wait, 1.0), 90.0))
                 delay = min(delay * 2, 90.0)
                 continue
+            if r.status_code == 400 and "tool_use_failed" in r.text:
+                raise PhantomToolCall(f"HTTP 400 from {self.provider.name}: {r.text[:300]}")
             raise ModelError(f"HTTP {r.status_code} from {self.provider.name}: {r.text[:500]}")
         raise ModelError("unreachable")

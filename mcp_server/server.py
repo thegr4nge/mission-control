@@ -19,7 +19,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from physics.bodies import PLANETS, to_iso, to_mjd2000
 from physics.budget import check_budget
-from physics.flyby import DEFAULT_FLYBY_CANDIDATES, candidate_sequences, optimise_sequence
+from physics.flyby import candidate_sequences, default_flyby_candidates, optimise_sequence
 from physics.hohmann import hohmann
 from physics.visual import planet_tracks, transfer_path
 from mcp_server.push import publish
@@ -368,7 +368,7 @@ def propose_flyby_sequence(
     Either give explicit `sequences` (each from origin to destination, e.g.
     [["earth", "venus", "mars"]]) or let the tool enumerate every sequence with up to
     `max_flybys` (0-2) intermediate flybys drawn from `flyby_candidates` (default venus,
-    earth, mars, jupiter). Each sequence is optimised over departure date and leg times
+    earth, mars, jupiter, plus saturn for uranus and saturn and uranus for neptune). Each sequence is optimised over departure date and leg times
     with self-adaptive differential evolution; flybys are powered (pykep fb_dv), so a
     flyby dv near zero means a free gravity assist. Arrival: 'capture' into a circular
     orbit, 'rendezvous' (match the planet's velocity) or 'flyby' (no arrival burn).
@@ -387,7 +387,7 @@ def propose_flyby_sequence(
             raise ValueError("max_flybys must be 0, 1 or 2")
         if flyby_candidates is not None and not flyby_candidates:
             raise ValueError("flyby_candidates is empty; omit it to use the defaults, or use max_flybys=0")
-        candidates = DEFAULT_FLYBY_CANDIDATES if flyby_candidates is None else flyby_candidates
+        candidates = default_flyby_candidates(destination) if flyby_candidates is None else flyby_candidates
         seqs = candidate_sequences(origin, destination, candidates, max_flybys)
     if origin == destination:
         raise ValueError("origin and destination must differ")
