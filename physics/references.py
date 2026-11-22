@@ -144,6 +144,20 @@ CURTIS_4_3 = {
     "period_hours": 2.278,  # the book rounds its intermediate h; exact propagation gives 2.277
 }
 
+# Hohmann transfer LEO to GEO. Recalled, not checked against a source: the closed-form
+# tool reproduces all 7 recalled digits of every value, which rules out a garbled
+# memory but not a misattributed example number. The analytic vis-viva check in the
+# tests does not depend on this recollection.
+VALLADO_6_1 = {
+    "source": "D. A. Vallado, Fundamentals of Astrodynamics and Applications, 4th ed. (2013), Example 6-1 (recalled)",
+    "r1_km": 6378.1363 + 191.34411,
+    "r2_km": 6378.1363 + 35781.34857,
+    "dv1_km_s": 2.457038,
+    "dv2_km_s": 1.478187,
+    "dv_total_km_s": 3.935224,
+    "tof_hours": 5.256713,
+}
+
 # ---------------------------------------------------------------------------
 # NASA Earth-to-Mars energy minima
 # ---------------------------------------------------------------------------

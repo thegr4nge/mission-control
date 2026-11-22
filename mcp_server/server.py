@@ -20,6 +20,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from physics.bodies import PLANETS, to_iso, to_mjd2000
 from physics.budget import check_budget
 from physics.flyby import DEFAULT_FLYBY_CANDIDATES, candidate_sequences, optimise_sequence
+from physics.hohmann import hohmann
 from physics.propagation import Elements, propagate as kepler_propagate
 from physics.transfers import (
     DEFAULT_ARRIVAL_ALT_KM,
@@ -177,24 +178,58 @@ def find_launch_window(
 def propagate(
     position_km: list[float],
     velocity_km_s: list[float],
-    duration_days: float,
+    duration_days: float | None = None,
     central_body: Literal["sun", "mercury", "venus", "earth", "mars", "jupiter", "saturn", "uranus", "neptune"] = "sun",
+    duration_s: float | None = None,
 ) -> dict[str, Any]:
     """Two-body (Keplerian) propagation of a state vector for a duration (negative goes backwards).
 
-    Inputs and outputs are Cartesian in km and km/s, ecliptic J2000 axes for 'sun'. Returns
-    the final state at full precision plus initial and final orbital elements.
+    Give the duration as exactly one of duration_days or duration_s (seconds; use it for short
+    arcs so no precision is lost converting minutes to days). Inputs and outputs are Cartesian
+    in km and km/s, ecliptic J2000 axes for 'sun'. Returns the final state at full precision
+    plus initial and final orbital elements.
     """
-    res = kepler_propagate(position_km, velocity_km_s, duration_days * 86400.0, central_body)
+    if (duration_days is None) == (duration_s is None):
+        raise ValueError("give exactly one of duration_days or duration_s")
+    seconds = duration_s if duration_s is not None else duration_days * 86400.0
+    res = kepler_propagate(position_km, velocity_km_s, seconds, central_body)
     return {
         "central_body": central_body,
-        "duration_days": sig4(duration_days),
+        "duration_days": sig4(seconds / 86400.0),
+        "duration_s": sig4(seconds),
         "final_position_km": list(res.r_km),
         "final_velocity_km_s": list(res.v_km_s),
         "specific_energy_km2_s2": sig4(res.specific_energy_km2_s2),
         "initial_elements": elements_dict(res.initial),
         "final_elements": elements_dict(res.final),
         "model": "Keplerian two-body, Lagrange coefficients (pykep.propagate_lagrangian). No perturbations.",
+    }
+
+
+@server.tool(structured_output=True, title="Hohmann transfer")
+@user_errors
+def hohmann_transfer(
+    initial_radius_km: float,
+    final_radius_km: float,
+    central_body: Literal["sun", "mercury", "venus", "earth", "mars", "jupiter", "saturn", "uranus", "neptune"] = "earth",
+) -> dict[str, Any]:
+    """Two-burn Hohmann transfer between coplanar circular orbits about one body.
+
+    Radii are measured from the body's centre, not altitudes: add the body's radius
+    (Earth 6378 km) to an altitude first. Returns both burns, the total and the transfer time.
+    """
+    h = hohmann(initial_radius_km, final_radius_km, central_body)
+    return {
+        "central_body": central_body,
+        "initial_radius_km": sig4(h.r1_km),
+        "final_radius_km": sig4(h.r2_km),
+        "dv_first_burn_km_s": sig4(h.dv1_km_s),
+        "dv_second_burn_km_s": sig4(h.dv2_km_s),
+        "dv_total_km_s": sig4(h.dv_total_km_s),
+        "time_of_flight_hours": sig4(h.tof_s / 3600.0),
+        "transfer_semi_major_axis_km": sig4(h.transfer_a_km),
+        "transfer_eccentricity": sig4(h.transfer_e),
+        "model": "Two-body, impulsive burns, coplanar circular orbits (vis-viva).",
     }
 
 

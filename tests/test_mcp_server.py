@@ -10,7 +10,8 @@ from mcp.client import Client
 from mcp.client.stdio import StdioServerParameters
 
 MANIFEST = str(Path(__file__).resolve().parents[1] / "pixi.toml")
-EXPECTED_TOOLS = {"solve_transfer", "find_launch_window", "propagate", "check_delta_v_budget", "propose_flyby_sequence"}
+EXPECTED_TOOLS = {"solve_transfer", "find_launch_window", "propagate", "check_delta_v_budget", "propose_flyby_sequence",
+                  "hohmann_transfer"}
 
 
 def _reject_constant(name):
@@ -48,6 +49,8 @@ async def _session():
         out["equatorial"] = body(await c.call_tool("propagate", {
             "position_km": [7000, 0, 0], "velocity_km_s": [0, 7.546, 0], "duration_days": 0.01,
             "central_body": "earth"}))
+        out["hohmann"] = body(await c.call_tool("hohmann_transfer", {
+            "initial_radius_km": 6569.48041, "final_radius_km": 42159.48487}))
         late = await c.call_tool("solve_transfer", {
             "origin": "earth", "destination": "mars", "departure_date": "2160-01-01",
             "arrival_date": "2160-10-01", "ephemeris": "de440s"})
@@ -122,6 +125,12 @@ def test_flyby_ranks_venus_assist_first(session):
     assert ranked[0]["encounters"][1]["dv_km_s"] < 0.01
 
 
+def test_hohmann_matches_vallado_6_1(session):
+    h = session["hohmann"]
+    assert (h["dv_first_burn_km_s"], h["dv_second_burn_km_s"], h["dv_total_km_s"], h["time_of_flight_hours"]) == (
+        2.457, 1.478, 3.935, 5.257)  # Vallado 4th ed. Example 6-1 (recalled): 2.457038, 1.478187, 3.935224, 5.256713 h
+
+
 def test_bad_input_is_a_tool_error_not_a_crash(session):
     is_error, text = session["bad_date"]
     assert is_error and "cannot parse date" in text
@@ -138,6 +147,6 @@ def test_outputs_are_four_significant_figures(session):
                 check(v, path)
         elif isinstance(obj, float) and obj != 0:
             assert float(f"{obj:.4g}") == obj, f"{path} = {obj!r} is not 4 s.f."
-    for key in ("transfer", "window", "propagate", "budget", "flyby", "equatorial"):
+    for key in ("transfer", "window", "propagate", "budget", "flyby", "equatorial", "hohmann"):
         check(session[key], key)
     json.dumps(session["flyby"])  # serialisable

@@ -7,3 +7,6 @@ node_modules/
 # pixi environments
 .pixi/*
 !.pixi/config.toml
+
+# eval transcripts carry local paths; the .md score tables beside them are committed
+evals/results/*.json

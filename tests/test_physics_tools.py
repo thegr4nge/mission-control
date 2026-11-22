@@ -126,6 +126,30 @@ def test_window_search_flags_an_optimum_on_the_box_edge():
     assert not full.departure_at_edge and not full.tof_at_edge
 
 
+def test_hohmann_vis_viva_and_vallado_6_1():
+    """Closed form against an independent vis-viva calculation, and against Vallado Example 6-1 (recalled)."""
+    import math
+    from physics.hohmann import hohmann
+    from physics.references import VALLADO_6_1 as ref
+    mu, r1, r2 = 398600.4418, ref["r1_km"], ref["r2_km"]
+    a = (r1 + r2) / 2
+    dv1 = math.sqrt(mu * (2 / r1 - 1 / a)) - math.sqrt(mu / r1)
+    dv2 = math.sqrt(mu / r2) - math.sqrt(mu * (2 / r2 - 1 / a))
+    h = hohmann(r1, r2, "earth")
+    assert h.dv1_km_s == pytest.approx(dv1, rel=1e-6) and h.dv2_km_s == pytest.approx(dv2, rel=1e-6)
+    for got, want in ((h.dv1_km_s, ref["dv1_km_s"]), (h.dv2_km_s, ref["dv2_km_s"]),
+                      (h.dv_total_km_s, ref["dv_total_km_s"]), (h.tof_s / 3600, ref["tof_hours"])):
+        assert got == pytest.approx(want, abs=2e-6)
+    down = hohmann(r2, r1, "earth")  # inward transfer costs the same
+    assert down.dv_total_km_s == pytest.approx(h.dv_total_km_s, rel=1e-12)
+    with pytest.raises(ValueError):
+        hohmann(7000.0, 7000.0)
+    with pytest.raises(ValueError):
+        hohmann(-1.0, 7000.0)
+    with pytest.raises(ValueError, match="add the body's radius"):
+        hohmann(191.34411, 35781.34857, "earth")  # altitudes passed as radii
+
+
 def test_dates():
     assert to_mjd2000("2026-10-31T12:00:00Z") == to_mjd2000("2026-10-31T12:00") == 9800.5
     assert to_iso(9800.5 - 0.1 / 86400.0) == "2026-10-31T12:00"  # rounds, does not truncate
