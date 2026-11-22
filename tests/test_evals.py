@@ -68,6 +68,8 @@ def test_grounding_rejects_loose_roundings_and_small_inventions():
     assert grounding("about 4.1 km/s", tool, "")[1] == ["4.1"]
     assert grounding("", tool, "")[0] == 0.0
     assert grounding("C3 is 2160", tool, "")[1] == ["2160"]  # constants are not unit-scaled
+    assert grounding("radius 6 569.48041 km", tool, "radius 6569.48041 km")[1] == []
+    assert grounding("searched to 31 Dec 2026", tool, "", [{"latest_departure": "2026-12-31"}])[1] == []
     tiny = ['{"dv_km_s": 1.279e-09}']
     for written in ("1.3×10⁻⁹ km/s", "1.3 x 10^-9 km/s", "1.28e-9 km/s"):
         assert grounding(written, tiny, "")[1] == [], written

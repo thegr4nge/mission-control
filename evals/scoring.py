@@ -160,7 +160,9 @@ _SUPERSCRIPTS = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺",
 def _normalise(text: str) -> str:
     """Models write the minus sign as U+2212 and digits grouped with commas."""
     text = text.replace("−", "-")
-    text = re.sub(r"(?<=\d),(?=\d{3}\b)", "", text)
+    # Digit grouping: 1,234 and 1 234 with a thin, narrow no-break or no-break space.
+    text = re.sub(r"(?<=\d)[,   ](?=\d{3}(?!\d))", "", text)
+    text = re.sub(r"[   ]", " ", text)
     # 1.3x10^-9, 1.3 × 10⁻⁹ and the like become 1.3e-9.
     text = text.translate(_SUPERSCRIPTS)
     return re.sub(r"(\d(?:\.\d+)?)\s*[x×⋅*]\s*10\s*\^?\s*\(?([-+]?\d+)\)?", r"\1e\2", text)
@@ -189,6 +191,8 @@ def _arg_numbers(args: Any, free: bool = False) -> tuple[list[float], list[float
             bound_vals += b
     elif isinstance(args, (int, float)) and not isinstance(args, bool):
         (free_vals if free else bound_vals).append(abs(float(args)))
+    elif isinstance(args, str):  # dates the model chose (search bounds) may be quoted back as "31 Dec"
+        free_vals += [float(g) for m in DATE_RE.finditer(args) for g in m.groups() if g]
     return free_vals, bound_vals
 
 
