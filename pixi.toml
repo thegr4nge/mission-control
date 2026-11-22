@@ -15,7 +15,7 @@ crew = "python -m agents.crew"
 
 [dependencies]
 python = "3.12.*"
-pykep = ">=3.1"
+pykep = ">=3.1,<3.2"  # reference tests are tuned to this ephemeris code
 pytest = ">=9.2.0,<10"
 mcp = ">=2.3.0,<3"
 pygmo = ">=2.20.0,<3"

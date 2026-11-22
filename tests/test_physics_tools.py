@@ -229,7 +229,7 @@ def test_voyager_2_grand_tour_flybys_are_nearly_free_on_the_flown_dates():
     """Voyager 2 (NSSDCA 1977-076A) flew Jupiter, Saturn and Uranus as gravity assists. On the recorded
     days (noon UTC assumed), each patched-conic flyby needs under 2 % of its arrival v_inf in powered
     dv: measured 1.6 % at Jupiter, 0.77 % at Saturn, 0.01 % at Uranus. Moving Saturn by 60 days costs
-    2.6-12 %, so the check discriminates."""
+    2.7-11 %, so the check discriminates."""
     flown = _voyager_flybys()
     assert [e.body for e in flown] == ["jupiter", "saturn", "uranus"]
     for e in flown:
@@ -261,3 +261,19 @@ def test_flyby_optimiser_reports_ephemeris_limits_instead_of_crashing():
     with pytest.raises(ValueError, match="de440s"):
         optimise_sequence(["earth", "jupiter", "neptune"], to_mjd2000("2045-01-01"), to_mjd2000("2045-06-01"),
                           arrival_mode="flyby", seeds=1, generations=50)
+
+
+def test_flyby_ranking_skips_sequences_outside_the_ephemeris():
+    """One sequence that cannot fit before 2050 is reported as skipped; the others are still ranked."""
+    from mcp_server.server import propose_flyby_sequence
+    # From 2044, Earth-Uranus direct (at least 4.0 years) fits before 2050; Earth-Saturn-Uranus (8.3) cannot.
+    r = propose_flyby_sequence("earth", "uranus", "2044-01-01", "2044-12-31",
+                               sequences=[["earth", "uranus"], ["earth", "saturn", "uranus"]], arrival="flyby")
+    assert [x["sequence"] for x in r["ranked"]] == [["earth", "uranus"]]
+    assert r["skipped"][0]["sequence"] == ["earth", "saturn", "uranus"] and "de440s" in r["skipped"][0]["reason"]
+
+
+def test_de440s_out_of_range_is_a_clear_error_not_a_spice_dump():
+    with pytest.raises(ValueError, match="de440s"):
+        optimise_sequence(["earth", "jupiter", "neptune"], to_mjd2000("2145-01-01"), to_mjd2000("2145-06-01"),
+                          arrival_mode="flyby", ephemeris="de440s", seeds=1, generations=50)

@@ -163,3 +163,12 @@ def test_mission_log_reads_as_a_record():
     assert log.index("## Briefing") < log.index("## Navigator") < log.index("## Propulsion")
     assert "`solve_transfer` ok" in log and "`check_delta_v_budget` FAILED" in log  # the refused call
     assert "C3 9.145" in log
+
+
+def test_word_limits_in_prompts_do_not_ground_invented_values():
+    """Review finding: role prompts mention 150/250/300 words. Those must not make 'TOF 250 days' or
+    '150 km/s' look grounded."""
+    from evals.scoring import grounding
+    for invented in ("TOF 250 days", "it needs 150 km/s", "Total 12.5 km/s"):
+        assert grounding(invented, ['{"c3_km2_s2": 9.145}'], GOAL + " Default margin: 10%.")[1], invented
+    assert grounding("a 10% margin, in under 150 words", ['{}'], "Default margin: 10%.")[1] == []

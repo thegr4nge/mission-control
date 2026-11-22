@@ -15,7 +15,8 @@ import pygmo as pg
 import pykep as pk
 
 from physics.bodies import MU_SUN, check_planet, physical, planet
-from physics.transfers import DEFAULT_ARRIVAL_ALT_KM, DEFAULT_DEPARTURE_ALT_KM, burn_from_circular
+from physics.transfers import (DEFAULT_ARRIVAL_ALT_KM, DEFAULT_DEPARTURE_ALT_KM, EPHEMERIS_RANGE,
+                               burn_from_circular)
 
 ARRIVAL_MODES = ("capture", "flyby", "rendezvous")
 DEFAULT_FLYBY_CANDIDATES = ("venus", "earth", "mars", "jupiter")
@@ -72,6 +73,7 @@ class MgaProblem:
         self.lb = [dep_start] + [lo for lo, _ in tof_bounds]
         self.ub = [dep_end] + [hi for _, hi in tof_bounds]
         self.arrival_mode = arrival_mode
+        self.ephemeris = ephemeris
         self.r_dep = self.consts[0][1] + departure_alt_km * 1e3
         self.r_arr = self.consts[-1][1] + arrival_alt_km * 1e3
 
@@ -113,11 +115,15 @@ class MgaProblem:
     # de440s's 2150 limit), so the optimiser steers away from them instead of crashing.
     OUT_OF_RANGE_PENALTY = 1.0e3
 
+    def in_range(self, x) -> bool:
+        lo, hi = EPHEMERIS_RANGE[self.ephemeris]
+        epochs = np.cumsum(x)
+        return bool(epochs[0] >= lo and epochs[-1] <= hi)
+
     def fitness(self, x):
-        try:
-            return [self.evaluate(x).dv_total_km_s]
-        except ValueError:
+        if not self.in_range(x):  # checked up front: SPICE fails with OSError, jpl_lp with ValueError
             return [self.OUT_OF_RANGE_PENALTY + float(np.sum(x[1:])) * 1e-3]
+        return [self.evaluate(x).dv_total_km_s]
 
 
 def optimise_sequence(bodies, dep_start, dep_end, tof_bounds=None, arrival_mode="capture",

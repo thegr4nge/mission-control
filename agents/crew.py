@@ -164,7 +164,8 @@ async def fly(goal: str, model: ChatModel, session, say: Callable[[str, str], No
         model_tool.last_full = text
         return (compact(text) if ok else text), ok
 
-    async def role(name: str, messages: list[dict], tools: list[dict], max_turns: int = 12) -> str:
+    async def role(name: str, messages: list[dict], tools: list[dict], max_turns: int = 12,
+                   given: str = "") -> str:
         """Run one crew member, check its numbers, send it back once if needed."""
         turn = CrewTurn(name, "")
         m.turns.append(turn)
@@ -179,10 +180,11 @@ async def fly(goal: str, model: ChatModel, session, say: Callable[[str, str], No
                 raise RoleFailed(f"{name}: {run.error}")
             turn.text = run.final_text.strip()
             ok = [r for r in m.all_tools() if r.ok]
-            # Sources: tool results, the crew's own search bounds, the goal, today's date and the role's own
-            # instructions (which set things like the 10% margin), all of which the crew is told.
+            # Sources: tool results, the crew's own search bounds, the goal, today's date, and any fixed design
+            # input the role was given (propulsion's default 10% margin). Not the whole role prompt: its other
+            # numbers (word limits) would let invented values through.
             _, bad = grounding(turn.text, [r.result_text for r in ok],
-                               f"{goal} Today is {today}. {messages[0]['content']}", [r.arguments for r in ok])
+                               f"{goal} Today is {today}. {given}", [r.arguments for r in ok])
             if not bad:
                 m.ungrounded.pop(name, None)
                 break
@@ -216,7 +218,7 @@ async def fly(goal: str, model: ChatModel, session, say: Callable[[str, str], No
             {"role": "system", "content": PROPULSION_PROMPT},
             {"role": "user", "content": (f"Mission goal: {goal}\n\nNavigator's report:\n{nav_report}\n\n"
                                          f"Navigator's tool results:\n{_tool_log(nav_records)}")}],
-            pick_tools(listing, model, PROPULSION_TOOLS))
+            pick_tools(listing, model, PROPULSION_TOOLS), given="Default margin: 10%.")
         m.briefing = await role("briefing", [
             {"role": "system", "content": BRIEFING_PROMPT},
             {"role": "user", "content": (f"Mission goal: {goal}\n\nYour brief to the crew:\n{brief}\n\n"

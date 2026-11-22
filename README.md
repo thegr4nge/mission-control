@@ -87,7 +87,7 @@ Every reference names its source in `physics/references.py`, with a note on how 
 | Orbital elements | Curtis Ex. 4.3 † | all elements at 4 s.f. |
 | Hohmann transfer | closed-form vis-viva; Vallado Ex. 6-1 † | exact; all 7 recalled digits |
 | Gravity assist, inner | Mariner 10, NASA NSSDCA 1973-085A | Venus flyby free (1e-5 km/s) at the flown time |
-| Gravity assist, outer | Voyager 2, NASA NSSDCA 1977-076A | Jupiter, Saturn and Uranus flybys need under 2 % of v∞ on the flown days; dates moved by 60 days cost 2.6-12 % |
+| Gravity assist, outer | Voyager 2, NASA NSSDCA 1977-076A | Jupiter, Saturn and Uranus flybys need under 2 % of v∞ on the flown days; Saturn moved by 60 days costs 2.7-11 % |
 | Rocket equation | Tsiolkovsky, g0 = 9.80665 m/s² | exact |
 
 † Recalled from the book, not yet checked against the printed page. pykep matches every recalled digit,

@@ -362,6 +362,7 @@ def propose_flyby_sequence(
     arrival: Literal["capture", "flyby", "rendezvous"] = "capture",
     departure_orbit_altitude_km: float = DEFAULT_DEPARTURE_ALT_KM,
     capture_orbit_altitude_km: float = DEFAULT_ARRIVAL_ALT_KM,
+    ephemeris: Ephemeris = "jpl_lp",
 ) -> dict[str, Any]:
     """Rank gravity-assist sequences (and the direct transfer) by total delta-v.
 
@@ -392,11 +393,17 @@ def propose_flyby_sequence(
     if origin == destination:
         raise ValueError("origin and destination must differ")
 
-    results = []
+    results, skipped = [], []
     for s in seqs:
-        r = optimise_sequence(s, t0, t1, arrival_mode=arrival, departure_alt_km=departure_orbit_altitude_km,
-                              arrival_alt_km=capture_orbit_altitude_km)
+        try:
+            r = optimise_sequence(s, t0, t1, arrival_mode=arrival, departure_alt_km=departure_orbit_altitude_km,
+                                  arrival_alt_km=capture_orbit_altitude_km, ephemeris=ephemeris)
+        except ValueError as exc:  # e.g. no trajectory inside the ephemeris's date range: skip, report, go on
+            skipped.append({"sequence": list(s), "reason": str(exc)})
+            continue
         results.append(r)
+    if not results:
+        raise ValueError("no sequence could be evaluated: " + "; ".join(x["reason"] for x in skipped))
     results.sort(key=lambda r: r.dv_total_km_s)
 
     ranked = []
@@ -422,6 +429,7 @@ def propose_flyby_sequence(
     out = {
         "arrival": arrival,
         "ranked": ranked,
+        **({"skipped": skipped} if skipped else {}),
         "model": MODEL_NOTE + " Flybys: instantaneous rotation of v_inf no closer than pykep's safe radius; "
                               "any mismatch is paid as dv. Optimiser is stochastic; results are best found, not proven optimal.",
     }

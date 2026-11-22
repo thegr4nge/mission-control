@@ -2,79 +2,84 @@
 
 **Goal:** Plan a probe that flies past Saturn (no orbit insertion), launching from Earth in the next few years. Compare going direct with a Jupiter gravity assist and recommend the route that needs the least delta-v. The probe has no spacecraft mass data yet.
 
-Model groq:openai/gpt-oss-120b · started 2026-11-22T14:12:54+00:00 · 72 s · status **grounded** · 1 report(s) sent back for unverified numbers
+Model groq:openai/gpt-oss-120b · started 2026-11-22T18:28:53+00:00 · 141 s · status **grounded** · 2 report(s) sent back for unverified numbers
 
 ## Briefing
 
-**Mission Director Brief – Saturn Fly‑by (Δv‑minimising)**  
+**Flight‑Director Brief (274 words)**  
 
-**Goal:** Fly a probe past Saturn (no orbit insertion) launching from Earth after 2026‑11‑23.  
+**Mission goal:** Earth → Saturn fly‑by (no orbit insertion); launch after 2026‑11‑23; minimize total Δv.  
 
-**Launch windows (next_launch_opportunities):**  
-- Earliest viable window 2027‑06‑01, latest 2027‑08‑15 (C3 ≈ 107 km² s⁻²).  
-- Second window 2028‑06‑06 to 2028‑08‑20 (C3 = 106.5 km² s⁻²).  
-- Third window 2029‑06‑13 to 2029‑08‑27 (C3 ≈ 107 km² s⁻²).  
+**Tool‑derived launch windows (next_launch_opportunities):**  
+- Window 1: departure 2027‑07‑09 00:23 UTC, arrival 2034‑05‑28 02:20 UTC, C3 107.4 km² s⁻², Δv total 18.21 km s⁻¹ (includes capture).  
+- Window 2: departure 2028‑07‑13 19:54 UTC, arrival 2034‑06‑19 21:51 UTC, C3 106.5 km² s⁻², Δv departure 7.305 km s⁻¹, Δv total 18.13 km s⁻¹ (includes capture).  
 
-**Trajectories evaluated (propose_flyby_sequence):**  
+**Candidate trajectories (propose_flyby_sequence):**  
 
-| Option | Departure (UTC) | Arrival (UTC) | TOF (days) | C3 (km² s⁻²) | v∞ arrival (km s⁻¹) | Δv departure (km s⁻¹) | Δv total (km s⁻¹) |
-|--------|----------------|---------------|-----------|--------------|----------------------|----------------------|-------------------|
-| 1 Direct Earth→Saturn | 2028‑07‑13 20:25 | 2034‑06‑21 02:02 | 2168 | 106.5 | 5.744 | 7.305 | **7.305** |
-| 2 Earth→Jupiter→Saturn | 2029‑01‑03 14:57 | 2041‑05‑16 02:16 | 4515 | 77.76 | 2.826 | 6.321 | **6.321** |
-| – Jupiter fly‑by (intermediate) | 2032‑07‑05 05:51 | vinf in = 6.237 km s⁻¹, vinf out = 6.237 km s⁻¹ (Δv ≈ 0) | | | | | |
+1. **Direct Earth → Saturn** – sequence [earth, saturn]  
+   - Departure 2028‑07‑13 20:24 UTC (200 km circular Earth orbit)  
+   - Arrival 2034‑06‑21 02:04 UTC (Saturn fly‑by)  
+   - Time‑of‑flight 2168 days  
+   - C3 106.5 km² s⁻², Δv departure 7.305 km s⁻¹, total Δv 7.305 km s⁻¹  
+   - Arrival hyper‑speed v∞ 5.744 km s⁻¹  
 
-**Why Option 2 wins:**  
-- Lowest total Δv = 6.321 km s⁻¹ versus 7.305 km s⁻¹ for the direct leg.  
-- Launch‑energy C3 = 77.76 km² s⁻², substantially below the direct C3 = 106.5 km² s⁻², easing launcher performance.  
-- Arrival v∞ at Saturn is only 2.826 km s⁻¹, giving a slower fly‑by geometry if science requires longer encounter time.
+2. **Earth → Jupiter → Saturn (gravity‑assist)** – sequence [earth, jupiter, saturn]  
+   - Departure 2027‑12‑15 09:32 UTC (200 km circular Earth orbit)  
+   - Jupiter fly‑by 2031‑12‑15 10:55 UTC (v∞ in 6.668 km s⁻¹, v∞ out 6.668 km s⁻¹)  
+   - Arrival 2040‑08‑02 11:06 UTC (Saturn fly‑by, v∞ 3.06 km s⁻¹)  
+   - Time‑of‑flight 4614 days  
+   - C3 79.62 km² s⁻², Δv departure 6.386 km s⁻¹, total Δv 6.386 km s⁻¹ (fly‑by Δv ≈ 0)  
 
-**Can the spacecraft fly it?**  
-The Δv budgets are known (6.321 km s⁻¹ and 7.305 km s⁻¹), but without dry mass, propellant mass, and specific impulse the `check_delta_v_budget` tool cannot confirm feasibility. Provide those parameters to the propulsion team for a definitive budget check.
+**Recommendation:** The Jupiter‑assist path provides the lowest launch energy (C3 79.62 km² s⁻²) and the smallest total Δv (6.386 km s⁻¹) compared with the direct option (C3 106.5 km² s⁻², Δv 7.305 km s⁻¹). The trade‑off is a longer cruise (4614 days vs 2168 days).  
 
-**Model limits:**  
-All calculations use patched‑conic approximations and assume impulsive burns at departure (Δv departure) and at planetary encounters. Real‑world finite‑burn effects, deep‑space maneuvers, and non‑ideal gravity‑field perturbations are not captured.
+**Feasibility check:** Propulsion‑budget validation requires dry mass, propellant mass, and Isp; these are not yet supplied.  
 
-**Recommendation:** Pursue the Earth‑Jupiter‑Saturn sequence (Option 2) as the Δv‑optimal path, pending propulsion‑budget confirmation.
+**Model limits:** Trajectories are generated with patched‑conic approximations and assume impulsive burns; finite‑burn dynamics and higher‑order planetary perturbations are not modeled.
 
 ## Flight director
 
-**Navigator Brief**
+**Navigator Brief (≤150 words)**  
 
-- **Origin:** Earth  
-- **Target:** Saturn fly‑by (no orbit insertion)  
-- **Launch timeframe:** Find the next viable windows after today (2026‑11‑23) using **next_launch_opportunities** for the next few years.  
+- **Origin / Destination:** Earth → Saturn fly‑by (no orbit insertion).  
+- **Launch timeframe:** Identify the next viable launch windows after 2026‑11‑23 using `next_launch_opportunities`.  
+- **Optimization goal:** Minimize total Δv for the mission.  
 
-- **Optimization goal:** Minimize total Δv required for the mission.  
-
-- **Comparative trajectories:**  
+- **Trajectory options to evaluate:**  
   1. **Direct Earth‑to‑Saturn** transfer.  
-  2. **Earth‑to‑Jupiter gravity‑assist** then onward to Saturn.  
+  2. **Earth → Jupiter gravity‑assist → Saturn** transfer.  
 
-- **Action items:**  
-  - Compute Δv budgets, flight times, and any critical maneuver points for both options.  
-  - Highlight any constraints (e.g., launch energy, planetary alignment) that could affect feasibility.  
+- **Deliverables:** For each option, provide the Δv budget (launch, cruise, and any deep‑space maneuver), time‑of‑flight, and any critical planetary alignment constraints.  
 
-- **Propulsion check:** The spacecraft mass and propulsion performance are not yet defined; once Δv estimates are ready, the propulsion engineer will need to verify that the available thrust and propellant budget can meet the required Δv for each trajectory.  
+- **Propulsion check:** Once Δv values are available, the propulsion engineer will verify them against the probe’s (currently unspecified) mass and thrust capabilities.  
 
-Provide the results and a recommendation on which path offers the lowest Δv.
+Please run the opportunity search, generate the Δv estimates, and flag any trade‑off considerations (e.g., longer flight time vs. lower Δv).
 
 ## Navigator
 
-**Trajectory comparison (Δv‑minimising objective)**  
+**Navigator Brief (148 words)**  
 
-| Option | Departure (UTC) | Arrival (UTC) | TOF (days) | C3 (km² s⁻²) | v∞ arrival (km s⁻¹) | Δv departure (km s⁻¹) | Δv capture (km s⁻¹) | Δv total (km s⁻¹) |
-|--------|----------------|---------------|-----------|--------------|--------------------|----------------------|-------------------|-----------------|
-| **1 – Direct Earth→Saturn fly‑by** | 2028‑07‑13 20:25 | 2034‑06‑21 02:02 | 2168 | 106.5 | 5.744 | 7.305 | 0 (fly‑by) | **7.305** |
-| **2 – Earth→Jupiter gravity‑assist →Saturn fly‑by** | 2029‑01‑03 14:57 | 2041‑05‑16 02:16 | 4515 | 77.76 | 2.826 | 6.321 | 0 (fly‑by) | **6.321** |
+**Option 1 – Direct Earth → Saturn fly‑by**  
+- Departure UTC 2028‑07‑13 20:24 (200 km Earth circular)  
+- Arrival UTC 2034‑06‑21 02:04 (Saturn fly‑by)  
+- Time‑of‑flight 2 168 days  
+- C3 106.5 km² s⁻², v∞ arrival 5.744 km s⁻¹  
+- Δv departure 7.305 km s⁻¹ (no capture burn) – total 7.305 km s⁻¹  
 
-**Recommendation** – The Earth‑Jupiter‑Saturn sequence has the lowest total Δv (6.321 km s⁻¹) and a lower launch‑energy C3 (77.76 km² s⁻²) than the direct Earth‑Saturn transfer, making it the most propellant‑efficient option.
+**Option 2 – Earth → Jupiter → Saturn (gravity‑assist)**  
+- Departure UTC 2027‑12‑15 09:32 (200 km Earth circular)  
+- Jupiter fly‑by UTC 2031‑12‑15 10:55 (v∞ in 6.668 km s⁻¹, v∞ out 6.668 km s⁻¹)  
+- Arrival UTC 2040‑08‑02 11:06 (Saturn fly‑by, v∞ 3.06 km s⁻¹)  
+- Time‑of‑flight 4 614 days  
+- C3 79.62 km² s⁻², Δv departure 6.386 km s⁻¹ (fly‑by Δv ≈ 0) – total 6.386 km s⁻¹  
 
-- `next_launch_opportunities` ok: `{"after_date":"2026-11-23","count":3,"destination":"saturn","origin":"earth"}`
-- `propose_flyby_sequence` ok: `{"arrival":"flyby","destination":"saturn","earliest_departure":"2027-06-01","flyby_candidates":["jupiter"],"latest_departure":"2029-08-27","max_flybys":1,"origin":"earth"}`
+**Recommendation:** The Jupiter‑assist trajectory offers the lower launch C3 (79.62 km² s⁻²) and total Δv (6.386 km s⁻¹) compared with the direct option, making it the most Δv‑efficient path despite the longer flight time. Alignment windows for the Jupiter encounter (2031‑12) and Saturn fly‑by (2040‑08) are satisfied by the dates above.
+
+- `next_launch_opportunities` ok: `{"after_date":"2026-11-23","count":2,"destination":"saturn","origin":"earth"}`
+- `propose_flyby_sequence` ok: `{"arrival":"flyby","capture_orbit_altitude_km":0,"departure_orbit_altitude_km":200,"destination":"saturn","earliest_departure":"2027-06-01","flyby_candidates":["jupiter"],"latest_departure":"2028-08-20","max_flybys":1,"origin":"earth"}`
 
 ## Propulsion
 
-The mission goal does not provide the spacecraft’s **dry mass (kg)**, **propellant mass (kg)**, or **specific impulse (s)**. Without these three required parameters, the `check_delta_v_budget` tool cannot be run, so the delta‑v feasibility of the two options (direct Earth→Saturn Δv = 7.305 km s⁻¹, Earth→Jupiter→Saturn Δv = 6.321 km s⁻¹) cannot be evaluated yet. Provide the missing mass and Isp data to enable a budget check.
+The mission goal does not provide the spacecraft’s **dry mass**, **propellant mass**, or **specific impulse (Isp)**. Without these three required parameters, the `check_delta_v_budget` function cannot be run, so the delta‑v feasibility of either the direct Earth → Saturn fly‑by (Δv = 7.305 km s⁻¹) or the Earth → Jupiter → Saturn gravity‑assist (Δv = 6.386 km s⁻¹) cannot be evaluated. Once the dry‑mass, propellant‑mass, and Isp values are supplied, the budget can be checked with the 10 % margin specified.
 
 ---
 Every number above was checked against the physics tool results (pykep); full tool outputs are in the JSON file beside this one.

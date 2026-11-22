@@ -139,7 +139,8 @@ def check_key(expect, got: Any) -> bool:
 NUMBER_RE = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?")
 DATE_RE = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::\d{2})?Z?)?\b")
 # Citations are not physics numbers: "Example 4.3", "Table 2", "Eq. 5.28".
-CITATION_RE = re.compile(r"\b(?:example|table|eq\.?|equation|section|figure|fig\.?|chapter)\s+[\d.\-]+", re.I)
+CITATION_RE = re.compile(r"\b(?:example|table|eq\.?|equation|section|figure|fig\.?|chapter)\s+[\d.\-]+"
+                         r"|\b\d+\s+words?\b", re.I)  # citations and word counts are not physics
 
 # Geometry constants a correct explanation may quote without a tool (transfer-type boundary, full turn).
 GEOMETRIC_CONSTANTS = (90.0, 180.0, 270.0, 360.0)
