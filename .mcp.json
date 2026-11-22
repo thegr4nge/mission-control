@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "mission-control-physics": {
+      "command": "pixi",
+      "args": ["run", "mcp-server"]
+    }
+  }
+}

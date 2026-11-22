@@ -5,20 +5,18 @@ NASA/TM-2010-216764 Earth-to-Mars energy minima: within 0.2 % on both ephemeride
 """
 
 import numpy as np
-import pykep as pk
 import pytest
 
+from physics.bodies import to_mjd2000
 from physics.lambert_check import (
-    NASA_TRANSFERS,
-    TEXTBOOK_CASES,
-    best_transfer,
-    make_planets,
     pct_error,
     reference_self_consistency_km,
     signed_pct,
     solve_case,
     solve_nasa_transfer,
 )
+from physics.references import LAMBERT_CASES, NASA_OPTIMA, NASA_TRANSFERS
+from physics.transfers import find_launch_window
 
 MAX_PCT_ERROR = 0.1
 
@@ -27,19 +25,19 @@ MAX_PCT_ERROR = 0.1
 # at the percent level (e.g. 9 % with de440s centred on the barycentre).
 NASA_MAX_PCT_ERROR = 0.2
 
-CASES = pytest.mark.parametrize("case", TEXTBOOK_CASES, ids=lambda c: c.name)
+CASES = pytest.mark.parametrize("case", LAMBERT_CASES, ids=lambda c: c.name)
 
 
 @CASES
 def test_v1_matches_reference(case):
     v1, _ = solve_case(case)
-    assert pct_error(v1, np.array(case.v1_ref_km_s)) < MAX_PCT_ERROR
+    assert pct_error(v1, case.v1_ref_km_s) < MAX_PCT_ERROR
 
 
 @CASES
 def test_v2_matches_reference(case):
     _, v2 = solve_case(case)
-    assert pct_error(v2, np.array(case.v2_ref_km_s)) < MAX_PCT_ERROR
+    assert pct_error(v2, case.v2_ref_km_s) < MAX_PCT_ERROR
 
 
 @CASES
@@ -53,27 +51,19 @@ def test_reference_values_are_self_consistent(case):
     assert reference_self_consistency_km(case) < tolerance_km
 
 
-@pytest.fixture(scope="module", params=["jpl_lp", "de440s"])
-def planets(request):
-    return make_planets(request.param)
-
-
+@pytest.mark.parametrize("ephemeris", ["jpl_lp", "de440s"])
 @pytest.mark.parametrize("ref", NASA_TRANSFERS, ids=lambda r: r.label)
-def test_nasa_handbook_transfer(ref, planets):
-    tr = solve_nasa_transfer(ref, planets)
+def test_nasa_handbook_transfer(ref, ephemeris):
+    tr = solve_nasa_transfer(ref, ephemeris)
     assert abs(signed_pct(tr.c3_km2_s2, ref.c3_km2_s2)) < NASA_MAX_PCT_ERROR
     assert abs(signed_pct(tr.vinf_arr_km_s, ref.vinf_arr_km_s)) < NASA_MAX_PCT_ERROR
     assert tr.trajectory_type == ref.trajectory_type
 
 
-# NASA/TM-2010-216764 Table 1: optimal ballistic C3 per opportunity (both Type II).
-# The handbook searched on a 2 day grid, so its optimum date can differ by a day.
-@pytest.mark.parametrize("year, start, end, c3_ref, depart_ref", [
-    (2026, "2026-09-01", "2027-03-01", 9.144, "2026-10-31"),
-    (2028, "2028-09-01", "2029-03-01", 8.928, "2028-12-02"),
-])
+@pytest.mark.parametrize("year, start, end, c3_ref, depart_ref", NASA_OPTIMA, ids=lambda v: str(v))
 def test_window_search_finds_nasa_min_c3(year, start, end, c3_ref, depart_ref):
-    tr = best_transfer(pk.epoch(start + "T00:00:00").mjd2000, pk.epoch(end + "T00:00:00").mjd2000, "c3")
+    """The handbook searched on a 2 day grid, so its optimum date can differ by a day."""
+    tr = find_launch_window("earth", "mars", to_mjd2000(start), to_mjd2000(end), 100.0, 450.0, "c3").best
     assert abs(signed_pct(tr.c3_km2_s2, c3_ref)) < NASA_MAX_PCT_ERROR
-    assert abs(tr.depart_mjd2000 - pk.epoch(depart_ref + "T00:00:00").mjd2000) < 2.0
+    assert abs(tr.depart_mjd2000 - to_mjd2000(depart_ref)) < 2.0
     assert tr.trajectory_type == "II"
