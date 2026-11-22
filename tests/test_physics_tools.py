@@ -170,7 +170,9 @@ def test_next_launch_opportunities_match_nasa_handbook():
     """NASA/TM-2010-216764 Table 1 optimal C3: 2026 is 9.144 (31 Oct), 2028 is 8.928 (2 Dec)."""
     from physics.transfers import launch_opportunities, synodic_period_days
     from physics.references import NASA_OPTIMA
-    opps, synodic = launch_opportunities("earth", "mars", to_mjd2000("2026-06-01"), 2)
+    scan = launch_opportunities("earth", "mars", to_mjd2000("2026-06-01"), 2)
+    opps, synodic = scan.opportunities, scan.synodic_days
+    assert not scan.truncated and not any(o.minimum_before_start for o in opps)
     assert synodic == pytest.approx(780.0, rel=2e-3)  # Earth-Mars synodic period, 2.135 years
     assert len(opps) == len(NASA_OPTIMA)
     for opp, (_year, _start, _end, c3, date) in zip(opps, NASA_OPTIMA):
@@ -182,5 +184,32 @@ def test_next_launch_opportunities_match_nasa_handbook():
 def test_next_launch_opportunities_skip_a_window_that_has_closed():
     """From 2026-11-23 the 2026 window (best 31 Oct) has passed; the next is December 2028."""
     from physics.transfers import launch_opportunities
-    opps, _ = launch_opportunities("earth", "mars", to_mjd2000("2026-11-23"), 1)
+    opps = launch_opportunities("earth", "mars", to_mjd2000("2026-11-23"), 1).opportunities
     assert to_iso(opps[0].best.depart_mjd2000).startswith("2028-12-0")
+
+
+def test_opportunity_just_past_its_best_day_is_flagged():
+    """Earth to Mercury: from 2026-11-15 the window's best day (2026-11-25) lies ahead; from 2026-11-29 it has
+    just passed, the window is still the cheapest, and it must be flagged as past its best (review finding)."""
+    from physics.transfers import launch_opportunities
+    ahead = launch_opportunities("earth", "mercury", to_mjd2000("2026-11-15"), 1).opportunities[0]
+    assert to_iso(ahead.best.depart_mjd2000).startswith("2026-11-2") and not ahead.minimum_before_start
+    passed = launch_opportunities("earth", "mercury", to_mjd2000("2026-11-29"), 2).opportunities
+    assert passed[0].minimum_before_start and passed[0].best.c3_km2_s2 > ahead.best.c3_km2_s2
+    assert not passed[1].minimum_before_start and passed[1].best.depart_mjd2000 > to_mjd2000("2027-01-01")
+
+
+def test_outer_planet_scans_respect_the_ephemeris_range():
+    from physics.transfers import launch_opportunities
+    # jpl_lp ends in 2050: Earth to Neptune transfers take decades, so the scan is cut short and says so.
+    scan = launch_opportunities("earth", "neptune", to_mjd2000("2026-11-23"), 2)
+    assert scan.truncated and scan.opportunities
+    for o in scan.opportunities:
+        assert o.best.arrive_mjd2000 <= 18262.0
+    # Jupiter to Saturn on jpl_lp from 2049 cannot fit at all (the shortest flight is about 3.5 years):
+    # a clear error naming de440s.
+    with pytest.raises(ValueError, match="de440s"):
+        launch_opportunities("jupiter", "saturn", to_mjd2000("2049-01-01"), 1)
+    # de440s runs to 2150 and handles it.
+    far = launch_opportunities("jupiter", "saturn", to_mjd2000("2045-01-01"), 1, ephemeris="de440s")
+    assert far.opportunities and far.opportunities[0].best.arrive_mjd2000 <= 54780.0

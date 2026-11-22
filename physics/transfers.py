@@ -201,6 +201,10 @@ def hohmann_tof_days(a: str, b: str) -> float:
     return 0.5 * ((ra + rb) / 2.0) ** 1.5
 
 
+# Date coverage (MJD2000) of each ephemeris: pykep's jpl_lp is valid 1800-2050, de440s 1849-2150.
+EPHEMERIS_RANGE = {"jpl_lp": (-73048.0, 18262.0), "de440s": (-54700.0, 54780.0)}
+
+
 @dataclass(frozen=True)
 class Opportunity:
     best: Transfer  # minimum-C3 transfer, refined
@@ -208,47 +212,76 @@ class Opportunity:
     search_end_mjd2000: float
     tof_min_days: float
     tof_max_days: float
+    minimum_before_start: bool = False  # the window is still open but its best day was before after_date
+
+
+@dataclass(frozen=True)
+class OpportunityScan:
+    opportunities: list[Opportunity]
+    synodic_days: float
+    scanned_until_mjd2000: float
+    truncated: bool  # the scan or its times of flight were cut short by the ephemeris's end date
 
 
 def launch_opportunities(origin: str, destination: str, after_mjd2000: float, count: int = 2,
-                         ephemeris: str = "jpl_lp") -> tuple[list[Opportunity], float]:
+                         ephemeris: str = "jpl_lp") -> OpportunityScan:
     """The next `count` launch opportunities after a date, by minimum launch energy (C3).
 
-    Scans departure dates over count + 0.3 synodic periods; for each, takes the lowest C3
-    over times of flight from 0.35 to 1.75 Hohmann transfer times; finds the separate local
-    minima of that curve; refines each with find_launch_window. Returns the opportunities in
-    date order and the synodic period. A minimum at the very start of the scan counts only if
-    it is as good as the others (today may sit inside a window that is still open).
+    Scans departure dates over count + 0.3 synodic periods; for each, takes the lowest C3 over
+    times of flight from 0.35 to 1.75 Hohmann transfer times (arrivals kept inside the
+    ephemeris's range); finds separate local minima of that curve; refines each with
+    find_launch_window. A minimum at the very start of the scan means a window that is still
+    open but past its best day: it is kept only if it beats the later windows, and flagged.
     """
     origin, destination = check_planet(origin), check_planet(destination)
     if not 1 <= count <= 5:
         raise ValueError("count must be 1 to 5")
     if not math.isfinite(after_mjd2000):
         raise ValueError("date must be finite")
+    if ephemeris not in EPHEMERIS_RANGE:
+        raise ValueError(f"unknown ephemeris {ephemeris!r}")
+    eph_start, eph_end = EPHEMERIS_RANGE[ephemeris]
     synodic = synodic_period_days(origin, destination)
     hohmann = hohmann_tof_days(origin, destination)
     tof_lo, tof_hi = 0.35 * hohmann, 1.75 * hohmann
+    if after_mjd2000 < eph_start or after_mjd2000 + tof_lo >= eph_end:
+        raise ValueError(f"{ephemeris} covers {to_year(eph_start)}-{to_year(eph_end)}; a {origin} to {destination} "
+                         "transfer from that date would leave it"
+                         + (" (try ephemeris de440s, which runs to 2150)" if ephemeris == "jpl_lp" else ""))
     span = (count + 0.3) * synodic
+    last_dep = min(after_mjd2000 + span, eph_end - tof_lo)
+    truncated = last_dep < after_mjd2000 + span or after_mjd2000 + tof_hi > eph_end
     dep_step = max(2.0, synodic / 150.0)
     tof_step = max(2.0, (tof_hi - tof_lo) / 60.0)
-    deps = np.arange(after_mjd2000, after_mjd2000 + span + 1e-9, dep_step)
-    tofs = np.arange(tof_lo, tof_hi + 1e-9, tof_step)
+    deps = np.arange(after_mjd2000, last_dep + 1e-9, dep_step)
+    all_tofs = np.arange(tof_lo, tof_hi + 1e-9, tof_step)
     curve = np.array([min(solve_transfer(origin, destination, float(d), float(t), ephemeris=ephemeris).c3_km2_s2
-                          for t in tofs) for d in deps])
+                          for t in all_tofs if d + t <= eph_end) for d in deps])
 
     half = max(1, int(round(synodic / 3.0 / dep_step)))
-    minima = [i for i in range(len(deps))
-              if curve[i] == curve[max(0, i - half):i + half + 1].min()]
+    minima = []
+    for i in range(len(deps)):
+        window = curve[max(0, i - half):i + half + 1]
+        # A local minimum; on a flat stretch only the first of equal values counts.
+        if curve[i] == window.min() and not np.any(curve[max(0, i - half):i] == curve[i]):
+            minima.append(i)
     interior = [i for i in minima if 0 < i < len(deps) - 1]
     best_interior = min((curve[i] for i in interior), default=math.inf)
-    picked = [i for i in minima if 0 < i < len(deps) - 1 or curve[i] <= best_interior]
+    picked = [i for i in minima if 0 < i < len(deps) - 1 or (i == 0 and curve[i] <= best_interior)]
     picked = sorted(picked)[:count]
 
     out = []
     for i in picked:
         lo = max(after_mjd2000, float(deps[i]) - 3 * dep_step)
-        hi = float(deps[i]) + 3 * dep_step
-        refined = find_launch_window(origin, destination, lo, hi, tof_lo, tof_hi, "c3", ephemeris=ephemeris).best
+        hi = min(float(deps[i]) + 3 * dep_step, last_dep)
+        tof_top = min(tof_hi, eph_end - hi)
+        refined = find_launch_window(origin, destination, lo, max(hi, lo + 1.0), tof_lo, tof_top, "c3",
+                                     ephemeris=ephemeris).best
         out.append(Opportunity(refined, max(after_mjd2000, refined.depart_mjd2000 - 0.1 * synodic),
-                               refined.depart_mjd2000 + 0.1 * synodic, tof_lo, tof_hi))
-    return out, synodic
+                               min(refined.depart_mjd2000 + 0.1 * synodic, last_dep), tof_lo, tof_top,
+                               minimum_before_start=(i == 0)))
+    return OpportunityScan(out, synodic, float(last_dep), bool(truncated))
+
+
+def to_year(mjd2000: float) -> int:
+    return int(2000 + mjd2000 / 365.25)

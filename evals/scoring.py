@@ -208,9 +208,38 @@ def _is_rounding(x_text: str, y: float) -> bool:
     return abs(x - y) <= half * (1 + 1e-9) + 1e-12
 
 
-def _needs_trace(x_text: str) -> bool:
-    """Every non-integer, and every integer of 10 or more ('2 burns' and '4 s.f.' are not physics)."""
-    return "." in x_text or "e" in x_text.lower() or abs(float(x_text)) >= 10
+# A small whole number followed by one of these is a physical quantity ("8 km/s", "3 days"), not a count.
+UNIT_AFTER = re.compile(r"\s*(?:km|kg|m/s|m\b|au\b|days?\b|d\b|hours?\b|h\b|years?\b|yr\b|"
+                        r"minutes?\b|min\b|seconds?\b|sec\b|deg|°|%|tonnes?|t\b)", re.I)
+
+
+def _candidates(text: str) -> list[str]:
+    """Numbers in a reply that must trace: every non-integer, every integer of 10 or more, and small
+    integers with a unit after them ('2 burns' and '4 s.f.' are counts; '8 km/s' is physics)."""
+    out = []
+    for m in NUMBER_RE.finditer(text):
+        x = m.group(0)
+        if "." in x or "e" in x.lower() or abs(float(x)) >= 10 or UNIT_AFTER.match(text, m.end()):
+            out.append(x)
+    return out
+
+
+def _dates(text: str) -> list[date]:
+    out = []
+    for m in DATE_RE.finditer(_normalise(text)):
+        try:
+            out.append(date(int(m.group(1)), int(m.group(2)), int(m.group(3))))
+        except ValueError:
+            pass
+    return out
+
+
+def _arg_dates(args: Any) -> list[date]:
+    if isinstance(args, dict):
+        return [d for v in args.values() for d in _arg_dates(v)]
+    if isinstance(args, list):
+        return [d for v in args for d in _arg_dates(v)]
+    return _dates(args) if isinstance(args, str) else []
 
 
 def grounding(final_text: str, tool_texts: list[str], prompt: str,
@@ -227,6 +256,7 @@ def grounding(final_text: str, tool_texts: list[str], prompt: str,
     tool_args = tool_args if tool_args is not None else [{} for _ in tool_texts]
     base = _numbers(prompt)
     results: list[float] = []
+    known_dates = _dates(prompt)
     bad: list[str] = []
     for text, args in zip(tool_texts, tool_args):
         free, constrained = _arg_numbers(args)
@@ -237,15 +267,21 @@ def grounding(final_text: str, tool_texts: list[str], prompt: str,
         invented = [v for v in constrained
                     if not any(_is_rounding(repr(v), y) or _is_rounding(repr(y), v) for y in known_scaled)]
         base += free
+        known_dates += _arg_dates(args)  # search bounds the model chose
         if invented:
             bad += [f"input:{v:g}" for v in invented]
             continue
         results += _numbers(text)
+        known_dates += _dates(text)
     pool = [y * f for y in base + results for f in UNIT_FACTORS] + list(GEOMETRIC_CONSTANTS)
-    text = DATE_RE.sub(" ", CITATION_RE.sub(" ", _normalise(final_text)))
-    candidates = [m for m in NUMBER_RE.findall(text) if _needs_trace(m)]
+    clean = CITATION_RE.sub(" ", _normalise(final_text))
+    # ISO dates must match a source date to within a day (a time near midnight may round either way).
+    reply_dates = [(m.group(0)[:10], d) for m, d in zip(DATE_RE.finditer(clean), _dates(clean))]
+    bad += [s for s, d in reply_dates if not any(abs((d - k).days) <= 1 for k in known_dates)]
+    text = DATE_RE.sub(" ", clean)
+    candidates = _candidates(text)
     bad += [m for m in candidates if not any(_is_rounding(m, y) for y in pool)]
-    total = len(candidates) + sum(b.startswith("input:") for b in bad)
+    total = len(candidates) + len(reply_dates) + sum(b.startswith("input:") for b in bad)
     if total == 0:
         return 1.0, []
     return 1.0 - len(bad) / total, bad

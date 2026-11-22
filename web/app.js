@@ -290,9 +290,43 @@ function select_(li, ev) {
   showMission(ev);
 }
 
+// A deliberately small markdown subset for crew messages. Everything is HTML-escaped first, so model
+// output can only ever produce the handful of tags generated here.
+function markdown(src) {
+  const inline = (s) => esc(s)
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>");
+  const lines = String(src).split(/\r?\n/);
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^\s*\|.*\|\s*$/.test(line)) {               // table: consecutive |...| lines
+      const rows = [];
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) rows.push(lines[i++]);
+      i--;
+      const cells = (r) => r.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+      const body = rows.filter((r) => !/^\s*\|[\s:|-]+\|\s*$/.test(r));
+      out.push("<table>" + body.map((r, k) => "<tr>" + cells(r).map((c) =>
+        k === 0 ? `<th>${inline(c)}</th>` : `<td>${inline(c)}</td>`).join("") + "</tr>").join("") + "</table>");
+    } else if (/^\s*#{1,4}\s/.test(line)) {
+      out.push(`<div class="h">${inline(line.replace(/^\s*#+\s*/, ""))}</div>`);
+    } else if (/^\s*[-*]\s+/.test(line)) {
+      const items = [];
+      while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) items.push(lines[i++].replace(/^\s*[-*]\s+/, ""));
+      i--;
+      out.push("<ul>" + items.map((t) => `<li>${inline(t)}</li>`).join("") + "</ul>");
+    } else if (line.trim() === "") {
+      out.push("<br>");
+    } else {
+      out.push(`<div>${inline(line)}</div>`);
+    }
+  }
+  return out.join("");
+}
+
 function addChat(ev) {
   const li = document.createElement("li");
-  li.innerHTML = `<span class="who">${esc(ev.role || "crew")}</span><span class="text">${esc(ev.text || "")}</span>`;
+  li.innerHTML = `<span class="who">${esc(ev.role || "crew")}</span><div class="text">${markdown(ev.text || "")}</div>`;
   $("crew").append(li);
   li.scrollIntoView({ block: "end" });
 }

@@ -95,7 +95,8 @@ class Mission:
     started_utc: str
     turns: list[CrewTurn] = field(default_factory=list)
     briefing: str = ""
-    ungrounded: list[str] = field(default_factory=list)
+    status: str = "running"  # grounded | ungrounded (numbers left unverified) | failed
+    ungrounded: dict[str, list[str]] = field(default_factory=dict)  # role -> numbers no tool returned
     revisions: int = 0
     error: str | None = None
     seconds: float = 0.0
@@ -104,80 +105,126 @@ class Mission:
         return [c for t in self.turns for c in t.tool_calls]
 
 
+# Explanatory fields every result repeats; the model has them in the tool descriptions already.
+_VERBOSE_KEYS = {"model", "method", "note", "search"}
+
+
+def compact(text: str) -> str:
+    """A tool result as the model sees it: minified JSON without the boilerplate fields. Free tiers
+    count tokens per minute (Groq: 8k), and indented results with repeated model notes cost several
+    times more. The full text is kept for the record and for checking grounding."""
+    try:
+        data = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return text
+
+    def strip(x):
+        if isinstance(x, dict):
+            return {k: strip(v) for k, v in x.items() if k not in _VERBOSE_KEYS}
+        if isinstance(x, list):
+            return [strip(v) for v in x]
+        return x
+    return json.dumps(strip(data), separators=(",", ":"))
+
+
 def _tool_log(records: list[ToolRecord]) -> str:
-    lines = []
-    for r in records:
-        if r.ok:
-            lines.append(f"- {r.name}({json.dumps(r.arguments)}) returned: {r.result_text}")
+    lines = [f"- {r.name}({json.dumps(r.arguments, separators=(',', ':'))}) returned: {compact(r.result_text)}"
+             for r in records if r.ok]
     return "\n".join(lines) or "(no successful tool calls)"
+
+
+class RoleFailed(RuntimeError):
+    pass
+
+
+def pick_tools(listing, model: ChatModel, names) -> list[dict]:
+    tools = mcp_tools_to_openai(listing.tools, model.provider.simple_schemas)
+    return [t for t in tools if t["function"]["name"] in names]
 
 
 async def fly(goal: str, model: ChatModel, session, say: Callable[[str, str], None],
               today: str | None = None, max_revisions: int = 1) -> Mission:
-    """Run the crew on one goal. say(role, text) is called as each crew member speaks."""
+    """Run the crew on one goal. say(role, text) is called as each crew member speaks.
+
+    Every role's report is checked the same way: each number and ISO date must trace to a tool
+    result so far, a search bound the crew chose, or the goal. A report that fails is sent back
+    once with the offending numbers; if it still fails it is shown with them marked and the
+    mission's status is 'ungrounded', not 'grounded'. Never raises: failures go in the transcript.
+    """
     today = today or dt.date.today().isoformat()
     m = Mission(goal, model.label, dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"))
     t_start = time.time()
-    all_tools = mcp_tools_to_openai((await session.list_tools()).tools, model.provider.simple_schemas)
-    pick = lambda names: [t for t in all_tools if t["function"]["name"] in names]  # noqa: E731
 
-    async def call_tool(name: str, args: dict) -> tuple[str, bool]:
+    async def model_tool(name: str, args: dict) -> tuple[str, bool]:
         res = await session.call_tool(name, args)
-        return "\n".join(getattr(c, "text", "") for c in res.content), not res.is_error
+        text = "\n".join(getattr(c, "text", "") for c in res.content)
+        ok = not res.is_error
+        model_tool.last_full = text
+        return (compact(text) if ok else text), ok
 
-    def check(run: AgentRun, role: str) -> str:
-        if run.error:
-            raise ModelError(f"{role}: {run.error}")
-        return run.final_text.strip()
+    async def role(name: str, messages: list[dict], tools: list[dict], max_turns: int = 12) -> str:
+        """Run one crew member, check its numbers, send it back once if needed."""
+        turn = CrewTurn(name, "")
+        m.turns.append(turn)
+
+        def keep(rec: ToolRecord) -> None:  # record the full text, not the compacted one the model saw
+            rec.result_text = getattr(model_tool, "last_full", rec.result_text) if rec.ok else rec.result_text
+            turn.tool_calls.append(rec)
+
+        for attempt in range(max_revisions + 1):
+            run = await run_agent(model, model_tool, tools, messages, max_turns, on_tool=keep)
+            if run.error:
+                raise RoleFailed(f"{name}: {run.error}")
+            turn.text = run.final_text.strip()
+            ok = [r for r in m.all_tools() if r.ok]
+            # Sources: tool results, the crew's own search bounds, the goal, and today's date (which the crew is told).
+            _, bad = grounding(turn.text, [r.result_text for r in ok], f"{goal} Today is {today}.",
+                               [r.arguments for r in ok])
+            if not bad:
+                m.ungrounded.pop(name, None)
+                break
+            m.ungrounded[name] = bad
+            if attempt == max_revisions:
+                break
+            m.revisions += 1
+            say("system", f"{name} report sent back: these numbers do not come from any tool result or the goal: "
+                + ", ".join(bad))
+            messages.append({"role": "user", "content": (
+                "These numbers in your report do not appear in any tool result or in the goal: " + ", ".join(bad)
+                + ". Rewrite the report using only numbers copied from tool results; drop any number you worked out "
+                "yourself, or call a tool that returns it.")})
+        shown = turn.text + (f"\n\n[unverified numbers: {', '.join(m.ungrounded[name])}]"
+                             if name in m.ungrounded else "")
+        say(name, shown)
+        return turn.text
 
     try:
         say("system", f"Mission goal: {goal}")
-        plan = await run_agent(model, call_tool, [], [
+        listing = await session.list_tools()
+        brief = await role("flight director", [
             {"role": "system", "content": director_plan_prompt(today)},
-            {"role": "user", "content": f"Mission goal: {goal}"}])
-        m.turns.append(CrewTurn("flight director", check(plan, "flight director")))
-        say("flight director", m.turns[-1].text)
-
-        nav = await run_agent(model, call_tool, pick(NAVIGATOR_TOOLS), [
+            {"role": "user", "content": f"Mission goal: {goal}"}], [])
+        nav_report = await role("navigator", [
             {"role": "system", "content": NAVIGATOR_PROMPT},
-            {"role": "user", "content": f"Mission goal: {goal}\n\nFlight director's brief:\n{m.turns[0].text}"}],
-            max_turns=16)
-        m.turns.append(CrewTurn("navigator", check(nav, "navigator"), nav.tool_calls))
-        say("navigator", m.turns[-1].text)
-
-        prop = await run_agent(model, call_tool, pick(PROPULSION_TOOLS), [
+            {"role": "user", "content": f"Mission goal: {goal}\n\nFlight director's brief:\n{brief}"}],
+            pick_tools(listing, model, NAVIGATOR_TOOLS), max_turns=16)
+        nav_records = m.turns[-1].tool_calls
+        prop_report = await role("propulsion", [
             {"role": "system", "content": PROPULSION_PROMPT},
-            {"role": "user", "content": (f"Mission goal: {goal}\n\nNavigator's report:\n{m.turns[1].text}\n\n"
-                                         f"Navigator's tool results:\n{_tool_log(nav.tool_calls)}")}])
-        m.turns.append(CrewTurn("propulsion", check(prop, "propulsion"), prop.tool_calls))
-        say("propulsion", m.turns[-1].text)
-
-        records = m.all_tools()
-        messages = [
+            {"role": "user", "content": (f"Mission goal: {goal}\n\nNavigator's report:\n{nav_report}\n\n"
+                                         f"Navigator's tool results:\n{_tool_log(nav_records)}")}],
+            pick_tools(listing, model, PROPULSION_TOOLS))
+        m.briefing = await role("briefing", [
             {"role": "system", "content": BRIEFING_PROMPT},
-            {"role": "user", "content": (f"Mission goal: {goal}\n\nYour brief to the crew:\n{m.turns[0].text}\n\n"
-                                         f"Navigator's report:\n{m.turns[1].text}\n\n"
-                                         f"Propulsion's report:\n{m.turns[2].text}\n\n"
-                                         f"All tool results:\n{_tool_log(records)}")}]
-        brief = check(await run_agent(model, call_tool, [], messages), "flight director")
-        ok = [r for r in records if r.ok]
-        for attempt in range(max_revisions + 1):
-            score, bad = grounding(brief, [r.result_text for r in ok], goal, [r.arguments for r in ok])
-            m.ungrounded = bad
-            if not bad or attempt == max_revisions:
-                break
-            m.revisions += 1
-            say("system", "Briefing sent back: these numbers do not come from any tool result: " + ", ".join(bad))
-            messages.append({"role": "user", "content": (
-                "These numbers in your briefing do not appear in any tool result or in the goal: "
-                + ", ".join(bad) + ". Rewrite the briefing using only numbers copied from the tool results; "
-                "drop any number you derived yourself.")})
-            brief = check(await run_agent(model, call_tool, [], messages), "flight director")
-        m.briefing = brief
-        say("flight director", brief + (f"\n\n[unverified numbers: {', '.join(m.ungrounded)}]" if m.ungrounded else ""))
-    except ModelError as exc:
-        m.error = str(exc)
-        say("system", f"Crew stopped: {exc}")
+            {"role": "user", "content": (f"Mission goal: {goal}\n\nYour brief to the crew:\n{brief}\n\n"
+                                         f"Navigator's report:\n{nav_report}\n\n"
+                                         f"Propulsion's report:\n{prop_report}\n\n"
+                                         f"All tool results:\n{_tool_log(m.all_tools())}")}], [])
+        m.status = "ungrounded" if m.ungrounded else "grounded"
+    except Exception as exc:  # a model, MCP or harness failure: keep the transcript, say what happened
+        m.error = str(exc) if isinstance(exc, (RoleFailed, ModelError)) else f"{type(exc).__name__}: {exc}"
+        m.status = "failed"
+        say("system", f"Crew stopped: {m.error}")
     m.seconds = time.time() - t_start
     return m
 
@@ -217,11 +264,16 @@ def main(argv=None) -> int:
         async with Client(server_params(bridge=a.bridge)) as session:
             return await fly(a.goal, model, session, say)
 
-    m = anyio.run(go)
+    try:
+        m = anyio.run(go)
+    except Exception as exc:  # the physics server failed to start, or died outside a role
+        print(f"error: {type(exc).__name__}: {exc}", file=sys.stderr)
+        flush()
+        return 1
     flush()
-    print(f"\nsaved {save(m)} ({m.seconds:.0f} s, {len(m.all_tools())} tool calls, "
-          f"{m.revisions} revision(s), ungrounded: {m.ungrounded or 'none'})")
-    return 1 if m.error else 0
+    print(f"\nsaved {save(m)}: {m.status}, {m.seconds:.0f} s, {len(m.all_tools())} tool calls, "
+          f"{m.revisions} revision(s), unverified numbers: {m.ungrounded or 'none'}")
+    return {"grounded": 0, "ungrounded": 3}.get(m.status, 1)
 
 
 if __name__ == "__main__":

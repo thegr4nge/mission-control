@@ -33,7 +33,13 @@ ol { list-style: none; margin: 0; padding: 0; }
 #log .warn { color: var(--bad); margin-top: 4px; }
 #crew li { margin-bottom: 10px; }
 #crew .who { font-weight: 600; color: var(--accent); margin-right: 6px; }
-#crew .text { white-space: pre-wrap; overflow-wrap: anywhere; }
+#crew .text { overflow-wrap: anywhere; margin-top: 2px; }
+#crew .text table { border-collapse: collapse; font-size: 12px; margin: 4px 0; display: block; overflow-x: auto; }
+#crew .text th, #crew .text td { border: 1px solid var(--line); padding: 2px 6px; text-align: left;
+  white-space: nowrap; overflow-wrap: normal; }
+#crew .text ul { margin: 2px 0; padding-left: 18px; list-style: disc; }
+#crew .text .h { font-weight: 600; margin-top: 4px; }
+#crew .text code { background: #18213a; padding: 0 3px; border-radius: 3px; }
 aside, .tab { min-width: 0; }
 canvas#porkchop { width: 100%; height: auto; background: #000; border-radius: 6px; }
 .muted { color: var(--muted); }

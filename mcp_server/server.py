@@ -217,22 +217,31 @@ def next_launch_opportunities(
     for a closer look (for example to optimise total delta-v instead of C3). Takes about 3 s.
     """
     after = to_mjd2000(after_date)
-    opps, synodic = launch_opportunities(origin, destination, after, count, ephemeris)
+    scan = launch_opportunities(origin, destination, after, count, ephemeris)
+    opps = scan.opportunities
     out = {
         "origin": origin,
         "destination": destination,
         "after_utc": to_iso(after),
-        "synodic_period_days": sig4(synodic),
+        "synodic_period_days": sig4(scan.synodic_days),
         "opportunities": [{
             "best_c3": transfer_dict(o.best),
             "suggested_earliest_departure": to_iso(o.search_start_mjd2000)[:10],
             "suggested_latest_departure": to_iso(o.search_end_mjd2000)[:10],
             "suggested_min_time_of_flight_days": sig4(o.tof_min_days),
             "suggested_max_time_of_flight_days": sig4(o.tof_max_days),
+            **({"note": "This window is still open but its best day was before after_date; C3 is rising."}
+               if o.minimum_before_start else {}),
         } for o in opps],
         "method": ("Minimum C3 over times of flight from 0.35 to 1.75 Hohmann transfer times, on a departure grid "
                    "of synodic period / 150 (at least 2 days); each minimum refined with find_launch_window."),
     }
+    if scan.truncated:
+        out["warning"] = (f"The {ephemeris} ephemeris ends in {to_iso(scan.scanned_until_mjd2000)[:4]} or so, so the scan "
+                          "or its times of flight were cut short and later windows may be missing"
+                          + ("; ephemeris de440s runs to 2150." if ephemeris == "jpl_lp" else "."))
+    if len(opps) < count:
+        out.setdefault("warning", f"Only {len(opps)} window(s) found in the scanned span.")
     if opps:
         b = opps[0].best
         publish("next_launch_opportunities", out,
