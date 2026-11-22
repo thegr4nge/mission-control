@@ -28,5 +28,6 @@ A browser 3D solar system on real physics where a crew of AI agents designs and 
 - v3: professional features (export, saved studies, team use).
 
 ## Environment
-- Runs in WSL Ubuntu on Edan's laptop (Ryzen 7, 32GB RAM, no discrete GPU). Python 3.12.
+- Native Windows on Edan's laptop (Ryzen 7, 32GB RAM, no discrete GPU). Not WSL.
+- Environment managed by pixi (conda-forge), because pykep has no Windows pip wheel. Run things with `pixi run python ...`; add packages with `pixi add <pkg>`. pykep 3.1.0 confirmed importing on 2026-11-22.
 - Edan wants momentum: small verified steps, commit after each working step, keep explanations short.

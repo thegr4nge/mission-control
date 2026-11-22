@@ -1,0 +1,12 @@
+[workspace]
+authors = ["Edan <thegr4nge@users.noreply.github.com>"]
+channels = ['conda-forge']
+name = "mission-control"
+platforms = ['win-64']
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+python = "3.12.*"
+pykep = ">=3.1"
