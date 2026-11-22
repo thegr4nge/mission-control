@@ -127,7 +127,9 @@ class ChatModel:
         return sorted(m["id"] for m in r.json().get("data", []))
 
     def chat(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> dict[str, Any]:
-        body = {"model": self.model, "messages": messages, "tools": tools, "temperature": 0}
+        body = {"model": self.model, "messages": messages, "temperature": 0}
+        if tools:  # some providers reject an empty tools list
+            body["tools"] = tools
         delay = 5.0
         for attempt in range(self.max_retries + 1):
             try:

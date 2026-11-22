@@ -147,7 +147,7 @@ GEOMETRIC_CONSTANTS = (90.0, 180.0, 270.0, 360.0)
 # altitudes, durations, margins). Numbers passed in any other argument must already be grounded.
 FREE_ARGUMENTS = frozenset({"min_time_of_flight_days", "max_time_of_flight_days", "duration_days", "duration_s",
                             "departure_orbit_altitude_km", "capture_orbit_altitude_km", "margin_percent",
-                            "max_flybys"})
+                            "max_flybys", "count"})
 # A tool gives hours, the model may quote minutes; days and seconds; km and m; fractions and percent.
 UNIT_FACTORS = (1.0, 24.0, 1 / 24.0, 60.0, 1 / 60.0, 3600.0, 1 / 3600.0, 86400.0, 1 / 86400.0,
                 1000.0, 1e-3, 100.0, 0.01)

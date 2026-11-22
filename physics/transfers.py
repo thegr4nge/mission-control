@@ -177,3 +177,78 @@ def find_launch_window(origin: str, destination: str, dep_start: float, dep_end:
         grid_departures=tuple(float(d) for d in grid_deps), grid_tofs=tuple(float(t) for t in grid_tofs),
         grid_values=tuple(grid),
     )
+
+
+# ---------------------------------------------------------------------------
+# Where are the launch windows?
+# ---------------------------------------------------------------------------
+
+
+def synodic_period_days(a: str, b: str) -> float:
+    """Time between successive alignments of two planets: 1 / |1/T_a - 1/T_b|."""
+    from physics.bodies import PERIOD_DAYS
+    ta, tb = PERIOD_DAYS[check_planet(a)], PERIOD_DAYS[check_planet(b)]
+    if ta == tb:
+        raise ValueError("origin and destination must differ")
+    return 1.0 / abs(1.0 / ta - 1.0 / tb)
+
+
+def hohmann_tof_days(a: str, b: str) -> float:
+    """Half the period of the ellipse touching both planets' mean orbits (from their periods, Kepler III)."""
+    from physics.bodies import PERIOD_DAYS
+    ra = PERIOD_DAYS[check_planet(a)] ** (2.0 / 3.0)
+    rb = PERIOD_DAYS[check_planet(b)] ** (2.0 / 3.0)  # radius in units where 1 day^(2/3) ~ length
+    return 0.5 * ((ra + rb) / 2.0) ** 1.5
+
+
+@dataclass(frozen=True)
+class Opportunity:
+    best: Transfer  # minimum-C3 transfer, refined
+    search_start_mjd2000: float  # a departure window worth handing to find_launch_window
+    search_end_mjd2000: float
+    tof_min_days: float
+    tof_max_days: float
+
+
+def launch_opportunities(origin: str, destination: str, after_mjd2000: float, count: int = 2,
+                         ephemeris: str = "jpl_lp") -> tuple[list[Opportunity], float]:
+    """The next `count` launch opportunities after a date, by minimum launch energy (C3).
+
+    Scans departure dates over count + 0.3 synodic periods; for each, takes the lowest C3
+    over times of flight from 0.35 to 1.75 Hohmann transfer times; finds the separate local
+    minima of that curve; refines each with find_launch_window. Returns the opportunities in
+    date order and the synodic period. A minimum at the very start of the scan counts only if
+    it is as good as the others (today may sit inside a window that is still open).
+    """
+    origin, destination = check_planet(origin), check_planet(destination)
+    if not 1 <= count <= 5:
+        raise ValueError("count must be 1 to 5")
+    if not math.isfinite(after_mjd2000):
+        raise ValueError("date must be finite")
+    synodic = synodic_period_days(origin, destination)
+    hohmann = hohmann_tof_days(origin, destination)
+    tof_lo, tof_hi = 0.35 * hohmann, 1.75 * hohmann
+    span = (count + 0.3) * synodic
+    dep_step = max(2.0, synodic / 150.0)
+    tof_step = max(2.0, (tof_hi - tof_lo) / 60.0)
+    deps = np.arange(after_mjd2000, after_mjd2000 + span + 1e-9, dep_step)
+    tofs = np.arange(tof_lo, tof_hi + 1e-9, tof_step)
+    curve = np.array([min(solve_transfer(origin, destination, float(d), float(t), ephemeris=ephemeris).c3_km2_s2
+                          for t in tofs) for d in deps])
+
+    half = max(1, int(round(synodic / 3.0 / dep_step)))
+    minima = [i for i in range(len(deps))
+              if curve[i] == curve[max(0, i - half):i + half + 1].min()]
+    interior = [i for i in minima if 0 < i < len(deps) - 1]
+    best_interior = min((curve[i] for i in interior), default=math.inf)
+    picked = [i for i in minima if 0 < i < len(deps) - 1 or curve[i] <= best_interior]
+    picked = sorted(picked)[:count]
+
+    out = []
+    for i in picked:
+        lo = max(after_mjd2000, float(deps[i]) - 3 * dep_step)
+        hi = float(deps[i]) + 3 * dep_step
+        refined = find_launch_window(origin, destination, lo, hi, tof_lo, tof_hi, "c3", ephemeris=ephemeris).best
+        out.append(Opportunity(refined, max(after_mjd2000, refined.depart_mjd2000 - 0.1 * synodic),
+                               refined.depart_mjd2000 + 0.1 * synodic, tof_lo, tof_hi))
+    return out, synodic

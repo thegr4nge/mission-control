@@ -10,13 +10,10 @@ from __future__ import annotations
 import numpy as np
 import pykep as pk
 
-from physics.bodies import MU_SUN, PLANETS, check_planet, planet
+from physics.bodies import MU_SUN, PERIOD_DAYS, PLANETS, check_planet, planet
 
 AU_M = pk.AU
 
-# Sidereal periods (days), only to choose how long to sample each orbit polyline.
-_PERIOD_DAYS = {"mercury": 87.97, "venus": 224.7, "earth": 365.26, "mars": 686.98, "jupiter": 4332.6,
-                "saturn": 10759.2, "uranus": 30688.5, "neptune": 60182.0}
 
 
 def _au(r) -> list[float]:
@@ -79,7 +76,7 @@ def planet_orbits(epoch_mjd2000: float = 0.0, n: int = 180, names=PLANETS) -> di
     out = {}
     for name in names:
         p = planet(name, "jpl_lp")
-        period = _PERIOD_DAYS[name]
+        period = PERIOD_DAYS[name]
         start = epoch_mjd2000 - period / 2.0
         start = min(max(start, JPL_LP_START_MJD2000 + 1.0), JPL_LP_END_MJD2000 - 1.0 - period)
         out[name] = [_au(p.eph(pk.epoch(start + period * k / n))[0]) for k in range(n + 1)]

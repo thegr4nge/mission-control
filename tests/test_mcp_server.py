@@ -11,7 +11,7 @@ from mcp.client.stdio import StdioServerParameters
 
 MANIFEST = str(Path(__file__).resolve().parents[1] / "pixi.toml")
 EXPECTED_TOOLS = {"solve_transfer", "find_launch_window", "propagate", "check_delta_v_budget", "propose_flyby_sequence",
-                  "hohmann_transfer"}
+                  "hohmann_transfer", "next_launch_opportunities"}
 
 
 def _reject_constant(name):
@@ -53,6 +53,8 @@ async def _session():
             "central_body": "earth"}))
         out["hohmann"] = body(await c.call_tool("hohmann_transfer", {
             "initial_radius_km": 6569.48041, "final_radius_km": 42159.48487}))
+        out["opps"] = body(await c.call_tool("next_launch_opportunities", {
+            "origin": "earth", "destination": "mars", "after_date": "2026-11-23", "count": 1}))
         late = await c.call_tool("solve_transfer", {
             "origin": "earth", "destination": "mars", "departure_date": "2160-01-01",
             "arrival_date": "2160-10-01", "ephemeris": "de440s"})
@@ -133,6 +135,14 @@ def test_hohmann_matches_vallado_6_1(session):
         2.457, 1.478, 3.935, 5.257)  # Vallado 4th ed. Example 6-1 (recalled): 2.457038, 1.478187, 3.935224, 5.256713 h
 
 
+def test_next_launch_opportunities_over_mcp(session):
+    o = session["opps"]
+    [opp] = o["opportunities"]
+    assert opp["best_c3"]["departure_utc"].startswith("2028-12-0")  # NASA/TM-2010-216764 Table 3: 2028-12-02
+    assert abs(opp["best_c3"]["c3_km2_s2"] - 8.928) / 8.928 < 2e-3
+    assert opp["suggested_earliest_departure"] < opp["best_c3"]["departure_utc"] < opp["suggested_latest_departure"]
+
+
 def test_bad_input_is_a_tool_error_not_a_crash(session):
     is_error, text = session["bad_date"]
     assert is_error and "cannot parse date" in text
@@ -149,6 +159,6 @@ def test_outputs_are_four_significant_figures(session):
                 check(v, path)
         elif isinstance(obj, float) and obj != 0:
             assert float(f"{obj:.4g}") == obj, f"{path} = {obj!r} is not 4 s.f."
-    for key in ("transfer", "window", "propagate", "budget", "flyby", "equatorial", "hohmann"):
+    for key in ("transfer", "window", "propagate", "budget", "flyby", "equatorial", "hohmann", "opps"):
         check(session[key], key)
     json.dumps(session["flyby"])  # serialisable

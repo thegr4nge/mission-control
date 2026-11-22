@@ -164,3 +164,23 @@ def test_non_finite_inputs_rejected():
         propagate((7000.0, 0.0, 0.0), (0.0, float("nan"), 0.0), 60.0, "earth")
     with pytest.raises(ValueError):
         check_budget({"x": float("inf")}, 300.0, 1000.0, 100.0)
+
+
+def test_next_launch_opportunities_match_nasa_handbook():
+    """NASA/TM-2010-216764 Table 1 optimal C3: 2026 is 9.144 (31 Oct), 2028 is 8.928 (2 Dec)."""
+    from physics.transfers import launch_opportunities, synodic_period_days
+    from physics.references import NASA_OPTIMA
+    opps, synodic = launch_opportunities("earth", "mars", to_mjd2000("2026-06-01"), 2)
+    assert synodic == pytest.approx(780.0, rel=2e-3)  # Earth-Mars synodic period, 2.135 years
+    assert len(opps) == len(NASA_OPTIMA)
+    for opp, (_year, _start, _end, c3, date) in zip(opps, NASA_OPTIMA):
+        assert abs(opp.best.c3_km2_s2 - c3) / c3 < 2e-3
+        assert abs(opp.best.depart_mjd2000 - to_mjd2000(date)) <= 2.0
+        assert opp.search_start_mjd2000 < opp.best.depart_mjd2000 < opp.search_end_mjd2000
+
+
+def test_next_launch_opportunities_skip_a_window_that_has_closed():
+    """From 2026-11-23 the 2026 window (best 31 Oct) has passed; the next is December 2028."""
+    from physics.transfers import launch_opportunities
+    opps, _ = launch_opportunities("earth", "mars", to_mjd2000("2026-11-23"), 1)
+    assert to_iso(opps[0].best.depart_mjd2000).startswith("2028-12-0")

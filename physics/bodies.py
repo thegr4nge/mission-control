@@ -11,6 +11,11 @@ PLANETS = ("mercury", "venus", "earth", "mars", "jupiter", "saturn", "uranus", "
 EPHEMERIDES = ("jpl_lp", "de440s")
 
 MU_SUN = pk.MU_SUN  # m^3/s^2
+
+# Sidereal orbital periods in days (NASA Planetary Fact Sheet). Used to size searches and
+# to draw orbits, never as a physics result.
+PERIOD_DAYS = {"mercury": 87.97, "venus": 224.7, "earth": 365.26, "mars": 686.98, "jupiter": 4332.6,
+               "saturn": 10759.2, "uranus": 30688.5, "neptune": 60182.0}
 G0 = pk.G0  # standard gravity, m/s^2
 
 _DATE_ONLY = re.compile(r"^\d{4}-\d{2}-\d{2}$")

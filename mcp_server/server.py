@@ -29,6 +29,7 @@ from physics.transfers import (
     DEFAULT_DEPARTURE_ALT_KM,
     Transfer,
     find_launch_window as window_search,
+    launch_opportunities,
     solve_transfer as lambert_transfer,
 )
 
@@ -196,6 +197,48 @@ def find_launch_window(
     publish("find_launch_window", out, lambda: {**scene([origin, destination], [b.depart_mjd2000, b.arrive_mjd2000],
                                                       ephemeris),
                                                 "porkchop": porkchop(res)})
+    return out
+
+
+@server.tool(structured_output=True, title="Next launch opportunities")
+@user_errors
+def next_launch_opportunities(
+    origin: Planet,
+    destination: Planet,
+    after_date: str,
+    count: int = 2,
+    ephemeris: Ephemeris = "jpl_lp",
+) -> dict[str, Any]:
+    """When are the next launch windows? Use this first whenever the dates are not given.
+
+    Scans departure dates over about `count` synodic periods after `after_date`, finds each
+    window's minimum launch energy (C3) and returns, in date order, the best departure, its
+    transfer, and a departure range and time-of-flight range to pass to find_launch_window
+    for a closer look (for example to optimise total delta-v instead of C3). Takes about 3 s.
+    """
+    after = to_mjd2000(after_date)
+    opps, synodic = launch_opportunities(origin, destination, after, count, ephemeris)
+    out = {
+        "origin": origin,
+        "destination": destination,
+        "after_utc": to_iso(after),
+        "synodic_period_days": sig4(synodic),
+        "opportunities": [{
+            "best_c3": transfer_dict(o.best),
+            "suggested_earliest_departure": to_iso(o.search_start_mjd2000)[:10],
+            "suggested_latest_departure": to_iso(o.search_end_mjd2000)[:10],
+            "suggested_min_time_of_flight_days": sig4(o.tof_min_days),
+            "suggested_max_time_of_flight_days": sig4(o.tof_max_days),
+        } for o in opps],
+        "method": ("Minimum C3 over times of flight from 0.35 to 1.75 Hohmann transfer times, on a departure grid "
+                   "of synodic period / 150 (at least 2 days); each minimum refined with find_launch_window."),
+    }
+    if opps:
+        b = opps[0].best
+        publish("next_launch_opportunities", out,
+                lambda: scene([origin, destination], [b.depart_mjd2000, b.arrive_mjd2000], ephemeris))
+    else:
+        publish("next_launch_opportunities", out)
     return out
 
 

@@ -136,7 +136,7 @@ def test_openai_loop_runs_tools_and_scores_full_marks():
     s = score(t, tr)
     assert (s.tool_use, s.correctness, s.grounding, s.explanation) == (1.0, 1.0, 1.0, 1.0)
     sent_tools = {f["function"]["name"] for f in state["bodies"][0]["tools"]}
-    assert "hohmann_transfer" in sent_tools and len(sent_tools) == 6
+    assert "hohmann_transfer" in sent_tools and len(sent_tools) == 7
     assert state["bodies"][1]["messages"][-1]["role"] == "tool"
 
 

@@ -228,6 +228,8 @@ function legend() {
 function title(ev) {
   const r = ev.result || {};
   if (ev.kind === "propose_flyby_sequence" && r.ranked && r.ranked[0]) return r.ranked[0].sequence.join(" → ");
+  if (ev.kind === "next_launch_opportunities" && r.opportunities && r.opportunities[0])
+    return `${r.origin} → ${r.destination}: next window ${String(r.opportunities[0].best_c3.departure_utc).slice(0, 10)}`;
   if (r.origin) return `${r.origin} → ${r.destination}, departing ${String(r.departure_utc).slice(0, 10)}`;
   return ev.kind;
 }
@@ -244,6 +246,12 @@ function facts(ev) {
         f("v∞ arr", r.vinf_arrival_km_s, "km/s"), f("Δv total", r.dv_total_km_s, "km/s"));
     case "propose_flyby_sequence":
       return (r.ranked || []).map((s, i) => `${i + 1}. ${esc(s.sequence.join("→"))}: Δv ${esc(sf4(s.dv_total_km_s))} km/s, C3 ${esc(sf4(s.c3_km2_s2))} km²/s²`).join("<br>");
+    case "next_launch_opportunities":
+      return (r.opportunities || []).map((o, i) => {
+        const b = o.best_c3 || {};
+        return `${i + 1}. depart ${esc(String(b.departure_utc).slice(0, 10))}, C3 ${esc(sf4(b.c3_km2_s2))} km²/s², ` +
+          `TOF ${esc(sf4(b.time_of_flight_days))} d, Type ${esc(b.trajectory_type)}`;
+      }).join("<br>") + `<br>synodic period ${esc(sf4(r.synodic_period_days))} d`;
     case "hohmann_transfer":
       return join(f("burn 1", r.dv_first_burn_km_s, "km/s"), f("burn 2", r.dv_second_burn_km_s, "km/s"),
         f("total", r.dv_total_km_s, "km/s"), f("TOF", r.time_of_flight_hours, "h"));

@@ -13,6 +13,7 @@ from pathlib import Path
 from mcp.client import Client
 from mcp.client.stdio import StdioServerParameters
 
+from agents.loop import run_agent
 from agents.model_adapter import ChatModel, ModelError, mcp_tools_to_openai
 from evals.scoring import SYSTEM_PROMPT, ToolCall, Transcript, answer_instructions
 from evals.tasks import Task
@@ -38,55 +39,25 @@ def _result_text(result) -> str:
     return "\n".join(getattr(c, "text", "") for c in result.content)
 
 
-def echo_message(msg: dict) -> dict:
-    """The assistant turn as it goes back to the provider: role, content and tool calls only, plus
-    Gemini's extra_content (thought signatures, which Gemini requires back). Reasoning fields that
-    some providers return (Groq's `reasoning`) are dropped, since they reject them on input."""
-    out = {"role": "assistant", "content": msg.get("content")}
-    if msg.get("tool_calls"):
-        out["tool_calls"] = msg["tool_calls"]
-    if msg.get("extra_content"):
-        out["extra_content"] = msg["extra_content"]
-    return out
-
-
 async def run_openai_tasks(model: ChatModel, tasks: list[Task], max_turns: int = 12, on_done=None) -> list[Transcript]:
     """One physics server for the whole run; a fresh conversation per task."""
     out = []
     async with Client(server_params()) as session:
         tools = mcp_tools_to_openai((await session.list_tools()).tools, model.provider.simple_schemas)
+
+        async def call_tool(name: str, args: dict) -> tuple[str, bool]:
+            res = await session.call_tool(name, args)
+            return _result_text(res), not res.is_error
+
         for task in tasks:
             tr = Transcript(task.id, model.label, "")
             t0 = time.time()
             messages = [{"role": "system", "content": SYSTEM_PROMPT},
                         {"role": "user", "content": answer_instructions(task)}]
             try:
-                for turn in range(max_turns):
-                    tr.turns = turn + 1
-                    msg = model.chat(messages, tools)
-                    calls = msg.get("tool_calls") or []
-                    for i, call in enumerate(calls):
-                        call["id"] = call.get("id") or f"call_{turn}_{i}"
-                    messages.append(echo_message(msg))
-                    if not calls:
-                        tr.final_text = msg.get("content") or ""
-                        break
-                    for call in calls:
-                        fn = call.get("function", {})
-                        name = fn.get("name", "")
-                        try:
-                            args = json.loads(fn.get("arguments") or "{}")
-                            if not isinstance(args, dict):
-                                raise ValueError("arguments must be a JSON object")
-                        except ValueError as exc:
-                            text, ok, args = f"invalid JSON arguments: {exc}", False, {"_raw": fn.get("arguments")}
-                        else:
-                            res = await session.call_tool(name, args)
-                            text, ok = _result_text(res), not res.is_error
-                        tr.tool_calls.append(ToolCall(name, args, ok, text))
-                        messages.append({"role": "tool", "tool_call_id": call["id"], "content": text})
-                else:
-                    tr.error = f"no final answer after {max_turns} turns"
+                run = await run_agent(model, call_tool, tools, messages, max_turns)
+                tr.turns, tr.final_text, tr.error = run.turns, run.final_text, run.error
+                tr.tool_calls = [ToolCall(r.name, r.arguments, r.ok, r.result_text) for r in run.tool_calls]
             except ModelError as exc:
                 tr.error = str(exc)
             except Exception as exc:  # one broken task must not lose the run
