@@ -10,6 +10,8 @@ test = "pytest -v"
 lambert-check = "python -m physics.lambert_check"
 mcp-server = "python -m mcp_server.server"
 eval = "python -m evals.run_eval"
+bridge = "python -m bridge.server"
+crew = "python -m agents.crew"
 
 [dependencies]
 python = "3.12.*"
@@ -18,3 +20,4 @@ pytest = ">=9.2.0,<10"
 mcp = ">=2.3.0,<3"
 pygmo = ">=2.20.0,<3"
 httpx = ">=0.28.1,<0.29"
+websockets = ">=17.4,<18"

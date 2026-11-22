@@ -116,6 +116,11 @@ class WindowSearch:
     evaluations: int
     departure_at_edge: bool  # best departure within one refine step of the window bounds
     tof_at_edge: bool  # best time of flight within one refine step of its bounds
+    # The coarse grid, for a porkchop plot: objective value at grid_values[i][j] for departure
+    # grid_departures[i] (MJD2000) and time of flight grid_tofs[j] (days).
+    grid_departures: tuple[float, ...] = ()
+    grid_tofs: tuple[float, ...] = ()
+    grid_values: tuple[tuple[float, ...], ...] = ()
 
 
 def find_launch_window(origin: str, destination: str, dep_start: float, dep_end: float,
@@ -140,20 +145,26 @@ def find_launch_window(origin: str, destination: str, dep_start: float, dep_end:
     fine = step / 20.0
     count = 0
 
-    def search(deps, tofs):
+    def search(deps, tofs, record=None):
         nonlocal count
         best = None
         for d in deps:
+            row = []
             for t in tofs:
                 tr = solve_transfer(origin, destination, float(d), float(t),
                                     departure_alt_km, arrival_alt_km, ephemeris)
                 count += 1
+                row.append(tr.score(objective))
                 if best is None or tr.score(objective) < best.score(objective):
                     best = tr
+            if record is not None:
+                record.append(tuple(row))
         return best
 
-    coarse = search(np.arange(dep_start, dep_end + 1e-9, step),
-                    np.arange(tof_min_days, tof_max_days + 1e-9, step))
+    grid_deps = np.arange(dep_start, dep_end + 1e-9, step)
+    grid_tofs = np.arange(tof_min_days, tof_max_days + 1e-9, step)
+    grid: list[tuple[float, ...]] = []
+    coarse = search(grid_deps, grid_tofs, grid)
     best = search(
         np.arange(max(dep_start, coarse.depart_mjd2000 - step), min(dep_end, coarse.depart_mjd2000 + step) + 1e-9, fine),
         np.arange(max(tof_min_days, coarse.tof_days - step), min(tof_max_days, coarse.tof_days + step) + 1e-9, fine),
@@ -163,4 +174,6 @@ def find_launch_window(origin: str, destination: str, dep_start: float, dep_end:
         best=best, objective=objective, grid_step_days=step, refine_step_days=fine, evaluations=count,
         departure_at_edge=min(best.depart_mjd2000 - dep_start, dep_end - best.depart_mjd2000) < edge,
         tof_at_edge=min(best.tof_days - tof_min_days, tof_max_days - best.tof_days) < edge,
+        grid_departures=tuple(float(d) for d in grid_deps), grid_tofs=tuple(float(t) for t in grid_tofs),
+        grid_values=tuple(grid),
     )

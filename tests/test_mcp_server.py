@@ -26,7 +26,9 @@ def body(result):
 
 
 async def _session():
-    params = StdioServerParameters(command="pixi", args=["run", "--manifest-path", MANIFEST, "mcp-server"])
+    from mcp.client.stdio import get_default_environment
+    params = StdioServerParameters(command="pixi", args=["run", "--manifest-path", MANIFEST, "mcp-server"],
+                                   env={**get_default_environment(), "MISSION_CONTROL_BRIDGE": "off"})
     out = {}
     async with Client(params) as c:
         out["tools"] = {t.name for t in (await c.list_tools()).tools}

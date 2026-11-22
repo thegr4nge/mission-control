@@ -26,8 +26,12 @@ def pixi_exe() -> str:
     return shutil.which("pixi") or "pixi"
 
 
-def server_params() -> StdioServerParameters:
-    return StdioServerParameters(command=pixi_exe(), args=["run", "--manifest-path", MANIFEST, "mcp-server"])
+def server_params(bridge: str = "off") -> StdioServerParameters:
+    """The physics server as an MCP client launches it. bridge: where it pushes mission state
+    ('off' by default so evals and tests never draw in someone's open browser)."""
+    from mcp.client.stdio import get_default_environment
+    env = {**get_default_environment(), "MISSION_CONTROL_BRIDGE": bridge}
+    return StdioServerParameters(command=pixi_exe(), args=["run", "--manifest-path", MANIFEST, "mcp-server"], env=env)
 
 
 def _result_text(result) -> str:
@@ -107,8 +111,8 @@ def run_claude_task(task: Task, model: str | None = None, timeout_s: float = 600
     with tempfile.TemporaryDirectory(prefix="mc-eval-", ignore_cleanup_errors=True) as tmp:
         cfg = Path(tmp) / "mcp.json"
         p = server_params()
-        cfg.write_text(json.dumps({"mcpServers": {SERVER_NAME: {"command": p.command, "args": p.args}}}),
-                       encoding="utf-8")
+        cfg.write_text(json.dumps({"mcpServers": {SERVER_NAME: {
+            "command": p.command, "args": p.args, "env": {"MISSION_CONTROL_BRIDGE": "off"}}}}), encoding="utf-8")
         cmd = [claude, "-p", "--setting-sources", "project", "--disable-slash-commands",
                "--mcp-config", str(cfg), "--strict-mcp-config", "--tools", "",
                "--allowedTools", f"mcp__{SERVER_NAME}__*", "--no-session-persistence",

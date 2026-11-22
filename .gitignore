@@ -10,3 +10,6 @@ node_modules/
 
 # eval transcripts carry local paths; the .md score tables beside them are committed
 evals/results/*.json
+
+# crew mission transcripts (local)
+missions/

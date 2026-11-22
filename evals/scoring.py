@@ -159,7 +159,9 @@ _SUPERSCRIPTS = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺",
 
 def _normalise(text: str) -> str:
     """Models write the minus sign as U+2212 and digits grouped with commas."""
-    text = text.replace("−", "-")
+    # Minus signs and hyphens models use in numbers: U+2212 minus, U+2010/U+2011 (non-breaking) hyphens,
+    # U+2012 figure dash.
+    text = re.sub(r"[−‐‑‒]", "-", text)
     # Digit grouping: 1,234 and 1 234 with a thin, narrow no-break or no-break space.
     text = re.sub(r"(?<=\d)[,   ](?=\d{3}(?!\d))", "", text)
     text = re.sub(r"[   ]", " ", text)

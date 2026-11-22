@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mission Control</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    {"imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }}
+  </script>
+</head>
+<body>
+  <header>
+    <h1>Mission Control</h1>
+    <span id="mission-title">No mission yet: ask the crew, or call a physics tool</span>
+    <span id="status" class="status off" title="bridge connection">offline</span>
+  </header>
+  <main>
+    <section id="view">
+      <div id="scene"></div>
+      <div id="legend"></div>
+    </section>
+    <aside>
+      <nav>
+        <button data-tab="log" class="active">Mission log</button>
+        <button data-tab="porkchop">Porkchop</button>
+        <button data-tab="crew">Crew</button>
+      </nav>
+      <div id="tab-log" class="tab active"><ol id="log"></ol></div>
+      <div id="tab-porkchop" class="tab">
+        <p id="porkchop-caption" class="muted">Run find_launch_window to see a porkchop plot.</p>
+        <canvas id="porkchop" width="560" height="420"></canvas>
+        <p id="porkchop-hover" class="muted"></p>
+      </div>
+      <div id="tab-crew" class="tab"><ol id="crew"></ol></div>
+    </aside>
+  </main>
+  <footer>
+    <button id="play" title="play / pause">&#9654;</button>
+    <input id="time" type="range" min="0" max="1000" value="0" step="1" aria-label="mission time">
+    <span id="date">----</span>
+    <span id="phase" class="muted"></span>
+  </footer>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -21,6 +21,8 @@ from physics.bodies import PLANETS, to_iso, to_mjd2000
 from physics.budget import check_budget
 from physics.flyby import DEFAULT_FLYBY_CANDIDATES, candidate_sequences, optimise_sequence
 from physics.hohmann import hohmann
+from physics.visual import planet_tracks, transfer_path
+from mcp_server.push import publish
 from physics.propagation import Elements, propagate as kepler_propagate
 from physics.transfers import (
     DEFAULT_ARRIVAL_ALT_KM,
@@ -74,6 +76,24 @@ def sig4(x: float | None) -> float | None:
     if x == 0:
         return 0.0
     return float(f"{x:.4g}")
+
+
+def scene(bodies: list[str], epochs: list[float], ephemeris: str = "jpl_lp") -> dict[str, Any]:
+    """3D geometry for the browser: Lambert legs and every planet's track over the mission, from the
+    same ephemeris the tool used, so the arc drawn is the arc whose numbers were reported."""
+    return {"legs": transfer_path(bodies, epochs, ephemeris),
+            "tracks": planet_tracks(PLANETS, epochs[0], epochs[-1], ephemeris=ephemeris)}
+
+
+def porkchop(res, max_axis: int = 120) -> dict[str, Any]:
+    """The window search's coarse grid, thinned to at most max_axis points a side for display."""
+    deps, tofs, vals = res.grid_departures, res.grid_tofs, res.grid_values
+    si = max(1, -(-len(deps) // max_axis))
+    sj = max(1, -(-len(tofs) // max_axis))
+    return {"objective": res.objective,
+            "departures_mjd2000": list(deps[::si]), "tofs_days": list(tofs[::sj]),
+            "values": [[sig4(v) for v in row[::sj]] for row in vals[::si]],
+            "best": {"departure_mjd2000": res.best.depart_mjd2000, "tof_days": res.best.tof_days}}
 
 
 def transfer_dict(tr: Transfer) -> dict[str, Any]:
@@ -132,7 +152,9 @@ def solve_transfer(
     t0, t1 = to_mjd2000(departure_date), to_mjd2000(arrival_date)
     tr = lambert_transfer(origin, destination, t0, t1 - t0, departure_orbit_altitude_km,
                           capture_orbit_altitude_km, ephemeris)
-    return transfer_dict(tr)
+    out = transfer_dict(tr)
+    publish("solve_transfer", out, lambda: scene([origin, destination], [t0, t1], ephemeris))
+    return out
 
 
 @server.tool(structured_output=True, title="Find launch window")
@@ -170,6 +192,10 @@ def find_launch_window(
     if res.departure_at_edge or res.tof_at_edge:
         out["warning"] = ("The best point lies on the edge of the search box, so the true optimum is probably "
                           "outside it. Widen the departure window or time-of-flight range and search again.")
+    b = res.best
+    publish("find_launch_window", out, lambda: {**scene([origin, destination], [b.depart_mjd2000, b.arrive_mjd2000],
+                                                      ephemeris),
+                                                "porkchop": porkchop(res)})
     return out
 
 
@@ -193,7 +219,7 @@ def propagate(
         raise ValueError("give exactly one of duration_days or duration_s")
     seconds = duration_s if duration_s is not None else duration_days * 86400.0
     res = kepler_propagate(position_km, velocity_km_s, seconds, central_body)
-    return {
+    out = {
         "central_body": central_body,
         "duration_days": sig4(seconds / 86400.0),
         "duration_s": sig4(seconds),
@@ -204,6 +230,8 @@ def propagate(
         "final_elements": elements_dict(res.final),
         "model": "Keplerian two-body, Lagrange coefficients (pykep.propagate_lagrangian). No perturbations.",
     }
+    publish("propagate", out)
+    return out
 
 
 @server.tool(structured_output=True, title="Hohmann transfer")
@@ -219,7 +247,7 @@ def hohmann_transfer(
     (Earth 6378 km) to an altitude first. Returns both burns, the total and the transfer time.
     """
     h = hohmann(initial_radius_km, final_radius_km, central_body)
-    return {
+    out = {
         "central_body": central_body,
         "initial_radius_km": sig4(h.r1_km),
         "final_radius_km": sig4(h.r2_km),
@@ -231,6 +259,8 @@ def hohmann_transfer(
         "transfer_eccentricity": sig4(h.transfer_e),
         "model": "Two-body, impulsive burns, coplanar circular orbits (vis-viva).",
     }
+    publish("hohmann_transfer", out)
+    return out
 
 
 @server.tool(structured_output=True, title="Check delta-v budget")
@@ -250,7 +280,7 @@ def check_delta_v_budget(
     the required total.
     """
     b = check_budget(maneuvers_km_s, isp_s, dry_mass_kg, propellant_mass_kg, margin_percent)
-    return {
+    out = {
         "maneuvers_km_s": {k: sig4(v) for k, v in maneuvers_km_s.items()},
         "required_km_s": sig4(b.required_km_s),
         "margin_percent": sig4(margin_percent),
@@ -263,6 +293,8 @@ def check_delta_v_budget(
         "exhaust_velocity_km_s": sig4(b.exhaust_velocity_km_s),
         "model": "Single stage, impulsive, dv = Isp g0 ln(wet mass / dry mass).",
     }
+    publish("check_delta_v_budget", out)
+    return out
 
 
 @server.tool(structured_output=True, title="Propose flyby sequence")
@@ -335,12 +367,16 @@ def propose_flyby_sequence(
             "time_of_flight_days": sig4(r.tof_days),
             "encounters": enc,
         })
-    return {
+    out = {
         "arrival": arrival,
         "ranked": ranked,
         "model": MODEL_NOTE + " Flybys: instantaneous rotation of v_inf no closer than pykep's safe radius; "
                               "any mismatch is paid as dv. Optimiser is stochastic; results are best found, not proven optimal.",
     }
+    top = results[0]
+    publish("propose_flyby_sequence", out,
+            lambda: scene(list(top.bodies), [e.mjd2000 for e in top.encounters]))
+    return out
 
 
 def main() -> None:

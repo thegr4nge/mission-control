@@ -74,6 +74,7 @@ def test_grounding_rejects_loose_roundings_and_small_inventions():
     for written in ("1.3×10⁻⁹ km/s", "1.3 x 10^-9 km/s", "1.28e-9 km/s"):
         assert grounding(written, tiny, "")[1] == [], written
     assert grounding("4.2×10⁻⁹ km/s", tiny, "")[1] == ["4.2e-9"]
+    assert grounding("flyby Δv 1.279e‑9 km/s", tiny, "")[1] == []  # non-breaking hyphen exponent
 
 
 def test_grounding_catches_laundered_inputs():
