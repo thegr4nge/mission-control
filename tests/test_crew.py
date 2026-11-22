@@ -152,3 +152,14 @@ def test_compact_strips_boilerplate_only():
     text = json.dumps({"c3": 9.145, "model": "long note", "nested": [{"note": "x", "v": 1}]}, indent=2)
     assert json.loads(compact(text)) == {"c3": 9.145, "nested": [{"v": 1}]}
     assert compact("not json") == "not json"
+
+
+def test_mission_log_reads_as_a_record():
+    from agents.crew import mission_log
+    model, _ = scripted_crew()
+    m, _ = run_crew(model)
+    log = mission_log(m)
+    assert log.startswith("# Mission log") and "status **grounded**" in log
+    assert log.index("## Briefing") < log.index("## Navigator") < log.index("## Propulsion")
+    assert "`solve_transfer` ok" in log and "`check_delta_v_budget` FAILED" in log  # the refused call
+    assert "C3 9.145" in log

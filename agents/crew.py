@@ -232,10 +232,37 @@ async def fly(goal: str, model: ChatModel, session, say: Callable[[str, str], No
     return m
 
 
+def mission_log(m: Mission) -> str:
+    """The mission as a readable record: goal, briefing first, then each role and every tool call."""
+    lines = [f"# Mission log", "", f"**Goal:** {m.goal}", "",
+             f"Model {m.model} · started {m.started_utc} · {m.seconds:.0f} s · status **{m.status}**"
+             + (f" · {m.revisions} report(s) sent back for unverified numbers" if m.revisions else ""), ""]
+    if m.error:
+        lines += [f"**Stopped:** {m.error}", ""]
+    if m.ungrounded:
+        lines += ["**Numbers no tool returned:** "
+                  + "; ".join(f"{role}: {', '.join(nums)}" for role, nums in m.ungrounded.items()), ""]
+    if m.briefing:
+        lines += ["## Briefing", "", m.briefing, ""]
+    for t in m.turns:
+        if t.role == "briefing":
+            continue
+        lines += [f"## {t.role.capitalize()}", "", t.text or "(no report)", ""]
+        for c in t.tool_calls:
+            lines.append(f"- `{c.name}` {'ok' if c.ok else 'FAILED'}: `{json.dumps(c.arguments, separators=(',', ':'))}`")
+        if t.tool_calls:
+            lines.append("")
+    lines += ["---", "Every number above was checked against the physics tool results (pykep); full tool outputs "
+              "are in the JSON file beside this one."]
+    return "\n".join(lines) + "\n"
+
+
 def save(m: Mission) -> Path:
+    """Write the full transcript (JSON) and the readable mission log (markdown) to missions/."""
     MISSIONS.mkdir(exist_ok=True)
     path = MISSIONS / f"{time.strftime('%Y%m%d-%H%M%S')}.json"
     path.write_text(json.dumps(asdict(m), indent=2), encoding="utf-8")
+    path.with_suffix(".md").write_text(mission_log(m), encoding="utf-8")
     return path
 
 
