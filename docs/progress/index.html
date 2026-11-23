@@ -1,0 +1,174 @@
+<title>Mission Control Progress</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  /* Layout: one centred column, mission-patch header, then status, video, evidence. */
+  :root {
+    --bg: #f4f6fb; --panel: #ffffff; --line: #d9dfeb; --fg: #121a2b; --muted: #5b6680;
+    --accent: #c7681a; --ok: #1d8a5b; --next: #3a63c9; --wait: #a8711b;
+    --display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+    --body: "Inter", "Segoe UI", system-ui, sans-serif;
+    --mono: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg: #070a12; --panel: #0e1424; --line: #1f2a44; --fg: #dbe3f2; --muted: #8592ad;
+    --accent: #ffb347; --ok: #5ad19a; --next: #7fa2ff; --wait: #e6b35a; color-scheme: dark } }
+  :root[data-theme="dark"] {
+    --bg: #070a12; --panel: #0e1424; --line: #1f2a44; --fg: #dbe3f2; --muted: #8592ad;
+    --accent: #ffb347; --ok: #5ad19a; --next: #7fa2ff; --wait: #e6b35a; color-scheme: dark }
+  body { background: var(--bg); color: var(--fg); font: 15px/1.55 var(--body); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding-block: 28px 64px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: grid; gap: 36px; }
+  header { display: grid; gap: 6px; }
+  .eyebrow { font: 600 12px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+  h1 { font: 700 clamp(28px, 5vw, 40px)/1.1 var(--display); margin: 0; text-wrap: balance; }
+  h2 { font: 700 20px/1.2 var(--display); margin: 0 0 12px; }
+  .lede { color: var(--muted); max-width: 65ch; margin: 0; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .stat { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--panel); }
+  .stat b { display: block; font: 600 26px/1.1 var(--mono); font-variant-numeric: tabular-nums; }
+  .stat span { color: var(--muted); font-size: 13px; }
+  video { width: 100%; max-width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; background: #000; border: 1px solid var(--line); }
+  .caption { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .phases { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .phase { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; background: var(--panel); min-width: 0; }
+  .phase h3 { font: 600 15px/1.3 var(--display); margin: 0 0 10px; display: flex; justify-content: space-between; gap: 8px; }
+  .phase ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .phase li { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: baseline; }
+  .pill { font: 600 11px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 4px 7px; border-radius: 999px;
+    border: 1px solid currentColor; white-space: nowrap; }
+  .done { color: var(--ok); } .next { color: var(--next); } .wait { color: var(--wait); } .later { color: var(--muted); }
+  .li-text small { display: block; color: var(--muted); font-size: 13px; }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font: 600 12px/1.2 var(--mono); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  tr:last-child td { border-bottom: 0; }
+  td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bar { display: inline-block; height: 8px; border-radius: 4px; background: var(--accent); vertical-align: middle; margin-right: 8px; }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  figure { margin: 0; min-width: 0; }
+  figure img { width: 100%; border-radius: 8px; border: 1px solid var(--line); display: block; }
+  figcaption { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .asks { display: grid; gap: 10px; }
+  .ask { border-left: 3px solid var(--wait); padding: 4px 0 4px 12px; }
+  .ask b { font-weight: 600; }
+  a { color: var(--accent); }
+  code { font-family: var(--mono); font-size: 13px; }
+  footer { color: var(--muted); font-size: 13px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Progress · updated 23 Nov 2026</div>
+    <h1>Mission Control</h1>
+    <p class="lede">A browser 3D solar system on real orbital mechanics. An AI crew designs missions from a
+      plain-English goal and briefs you on what it tried. Agents orchestrate, pykep computes, and every number
+      is traced back to a physics tool.</p>
+  </header>
+
+  <section class="stats" aria-label="At a glance">
+    <div class="stat"><b>102</b><span>tests passing</span></div>
+    <div class="stat"><b>7</b><span>physics tools (MCP)</span></div>
+    <div class="stat"><b>10</b><span>reference checks, all passing</span></div>
+    <div class="stat"><b>3</b><span>models scored on 10 tasks</span></div>
+    <div class="stat"><b>v0 + v1</b><span>built; v2 next</span></div>
+  </section>
+
+  <section>
+    <h2>Demo</h2>
+    <video controls preload="metadata" poster="media/frame-mid.jpg" src="media/mission-control-demo.mp4"></video>
+    <div class="caption">72 seconds, recorded from the real app by <code>scripts/make_demo_video.py</code>. Arcs, the
+      porkchop plot and every number on screen come from live tool calls; crew messages are replayed from two saved
+      missions run on Groq's free tier.</div>
+  </section>
+
+  <section>
+    <h2>Build order</h2>
+    <div class="phases">
+      <div class="phase">
+        <h3>v0 <span class="pill done">done</span></h3>
+        <ol>
+          <li><span class="pill done">done</span><span class="li-text">pykep stack proven<small>Lambert against Curtis and Vallado; NASA Earth-Mars transfers within 0.10 %</small></span></li>
+          <li><span class="pill done">done</span><span class="li-text">MCP physics server<small>7 tools; also registered in Claude Desktop</small></span></li>
+          <li><span class="pill done">done</span><span class="li-text">Eval, 10 tasks<small>Claude, Groq and Gemini scored</small></span></li>
+          <li><span class="pill done">done</span><span class="li-text">3D front end and websocket bridge<small>time slider, porkchop, mission log, crew chat</small></span></li>
+          <li><span class="pill done">done</span><span class="li-text">Crew agents and demo video<small>director, navigator, propulsion; every report grounding-checked</small></span></li>
+        </ol>
+      </div>
+      <div class="phase">
+        <h3>v1 <span class="pill done">done</span></h3>
+        <ol>
+          <li><span class="pill done">done</span><span class="li-text">Gravity assists<small>Mariner 10 Venus flyby reproduced on the flown dates</small></span></li>
+          <li><span class="pill done">done</span><span class="li-text">Outer planets<small>Voyager 2 grand tour; Jupiter assist to Saturn found unaided</small></span></li>
+          <li><span class="pill done">done</span><span class="li-text">Mission log briefing<small>markdown log per mission; examples in docs/example-missions</small></span></li>
+        </ol>
+      </div>
+      <div class="phase">
+        <h3>v2 <span class="pill next">next</span></h3>
+        <ol>
+          <li><span class="pill next">next</span><span class="li-text">Deep-space manoeuvres (MGA-1DSM)<small>unlocks Cassini- and Galileo-class trajectories; test against ESA's GTOP benchmark</small></span></li>
+          <li><span class="pill later">later</span><span class="li-text">Full crew<small>more roles, cross-checks between them</small></span></li>
+          <li><span class="pill later">later</span><span class="li-text">Score against a past GTOC problem<small>a published competition problem with known best answers</small></span></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Model eval</h2>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Model</th><th>Route</th><th>Correct</th><th>Grounded</th><th>Tool use</th><th>Explained</th></tr></thead>
+      <tbody>
+        <tr><td>Claude Opus 5.5</td><td>Claude Code CLI, Pro plan</td><td class="num"><span class="bar" style="width:60px"></span>1.00</td><td class="num">0.98</td><td class="num">1.00</td><td class="num">1.00</td></tr>
+        <tr><td>Groq gpt-oss-120b</td><td>free tier</td><td class="num"><span class="bar" style="width:60px"></span>1.00</td><td class="num">0.98</td><td class="num">0.95</td><td class="num">0.72</td></tr>
+        <tr><td>Gemini 3.1 flash-lite</td><td>free tier</td><td class="num"><span class="bar" style="width:57px"></span>0.95</td><td class="num">1.00</td><td class="num">1.00</td><td class="num">0.67</td></tr>
+      </tbody>
+    </table></div>
+    <div class="caption">Mean over 10 tasks with published answers. "Grounded" is the share of numbers in a reply
+      that trace to a tool result. The explanation score is a keyword check. Source: <code>evals/RESULTS.md</code>.</div>
+  </section>
+
+  <section>
+    <h2>Checked against</h2>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Check</th><th>Reference</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>Lambert solver</td><td>Curtis Ex. 5.2; Vallado Ex. 7-5</td><td class="num">≤ 0.1 %</td></tr>
+        <tr><td>Earth-Mars transfers</td><td>NASA/TM-2010-216764, Tables 2-3</td><td class="num">≤ 0.10 %</td></tr>
+        <tr><td>Window optima</td><td>same, Table 1 (C3 9.144, 8.928)</td><td class="num">9.139, 8.929</td></tr>
+        <tr><td>Next launch windows</td><td>found by search from today</td><td class="num">2028-12-02</td></tr>
+        <tr><td>Kepler propagation</td><td>Curtis Ex. 3.7</td><td class="num">0.014 %</td></tr>
+        <tr><td>Orbital elements</td><td>Curtis Ex. 4.3 †</td><td class="num">4 s.f.</td></tr>
+        <tr><td>Hohmann</td><td>vis-viva; Vallado Ex. 6-1 †</td><td class="num">exact</td></tr>
+        <tr><td>Venus gravity assist</td><td>Mariner 10, NSSDCA 1973-085A</td><td class="num">1e-5 km/s</td></tr>
+        <tr><td>Outer-planet assists</td><td>Voyager 2, NSSDCA 1977-076A</td><td class="num">≤ 1.6 % of v∞</td></tr>
+        <tr><td>Rocket equation</td><td>Tsiolkovsky, g0 = 9.80665</td><td class="num">exact</td></tr>
+      </tbody>
+    </table></div>
+    <div class="caption">† Recalled from the book; not yet checked against the printed page.</div>
+  </section>
+
+  <section>
+    <h2>Screens</h2>
+    <div class="gallery">
+      <figure><img src="media/shot-porkchop.jpg" alt="Earth to Mars 2028 window with porkchop plot"><figcaption>The 2028 Mars window search and its porkchop plot</figcaption></figure>
+      <figure><img src="media/shot-mars.jpg" alt="Spacecraft mid-cruise from Earth to Mars"><figcaption>Earth to Mars, Type II, mid-cruise</figcaption></figure>
+      <figure><img src="media/shot-saturn.jpg" alt="Earth-Jupiter-Saturn trajectory"><figcaption>Saturn flyby via a Jupiter gravity assist</figcaption></figure>
+      <figure><img src="media/shot-voyager.jpg" alt="Voyager 2 grand tour arcs"><figcaption>Voyager 2's grand tour on its flown dates</figcaption></figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>Waiting on Edan</h2>
+    <div class="asks">
+      <div class="ask"><b>Check three recalled references</b> against the books: Vallado 6-1 and 2-4, Curtis 4.3.</div>
+      <div class="ask"><b>Rerun the Gemini eval</b> on a flash model once Google's "high demand" errors clear.</div>
+      <div class="ask"><b>Re-login before 22 Dec 2026</b> so claude-mem keeps saving.</div>
+    </div>
+  </section>
+
+  <footer>Repository: <a href="https://github.com/thegr4nge/mission-control">github.com/thegr4nge/mission-control</a> · Apache-2.0</footer>
+</div>

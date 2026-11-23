@@ -465,4 +465,5 @@ function connect() {
 legend();
 setTime(state.t);
 connect();
-window.__mc = { state, scene }; // for debugging from the console
+// For debugging from the console and for scripted recordings (scripts/make_demo_video.py).
+window.__mc = { state, scene, camera, controls, setTime, fitCamera };

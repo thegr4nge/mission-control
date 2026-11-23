@@ -4,6 +4,10 @@ A 3D solar system in the browser, running on real orbital mechanics. A crew of A
 space missions from a plain-English goal, then briefs you on what they tried and why the final
 route won.
 
+![Voyager 2's grand tour drawn from pykep, with the mission log](docs/media/shot-voyager.jpg)
+
+To make the 72-second demo video from the real app, run `pixi run python -m scripts.make_demo_video`. It needs Chrome or Edge and ffmpeg.
+
 The rule that shapes everything: **agents orchestrate, pykep computes.** Every number an agent
 states must come from a physics tool call. A grounding check enforces this by tracing each number
 and date in a report back to a tool result. Reports that fail go back to the agent; if they still

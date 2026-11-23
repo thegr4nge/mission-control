@@ -16,3 +16,6 @@ missions/
 
 # personal project instructions for Claude (kept local)
 CLAUDE.md
+
+# demo video is rebuilt by scripts/make_demo_video.py and hosted on the progress page
+docs/media/*.mp4
