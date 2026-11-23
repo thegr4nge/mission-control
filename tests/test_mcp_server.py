@@ -11,7 +11,7 @@ from mcp.client.stdio import StdioServerParameters
 
 MANIFEST = str(Path(__file__).resolve().parents[1] / "pixi.toml")
 EXPECTED_TOOLS = {"solve_transfer", "find_launch_window", "propagate", "check_delta_v_budget", "propose_flyby_sequence",
-                  "hohmann_transfer", "next_launch_opportunities"}
+                  "hohmann_transfer", "next_launch_opportunities", "design_dsm_trajectory"}
 
 
 def _reject_constant(name):
@@ -55,6 +55,9 @@ async def _session():
             "initial_radius_km": 6569.48041, "final_radius_km": 42159.48487}))
         out["opps"] = body(await c.call_tool("next_launch_opportunities", {
             "origin": "earth", "destination": "mars", "after_date": "2026-11-23", "count": 1}))
+        out["dsm"] = body(await c.call_tool("design_dsm_trajectory", {
+            "sequence": ["earth", "mars"], "earliest_departure": "2028-06-01", "latest_departure": "2029-03-01",
+            "effort": "quick"}))
         late = await c.call_tool("solve_transfer", {
             "origin": "earth", "destination": "mars", "departure_date": "2160-01-01",
             "arrival_date": "2160-10-01", "ephemeris": "de440s"})
@@ -143,6 +146,14 @@ def test_next_launch_opportunities_over_mcp(session):
     assert opp["suggested_earliest_departure"] < opp["best_c3"]["departure_utc"] < opp["suggested_latest_departure"]
 
 
+def test_dsm_trajectory_over_mcp(session):
+    d = session["dsm"]
+    assert d["sequence"] == ["earth", "mars"] and d["dv_deep_space_total_km_s"] < 0.01
+    assert abs(d["dv_total_km_s"] - 5.884) / 5.884 < 1e-3  # equals the Lambert optimum for this window
+    assert [e["role"] for e in d["encounters"]] == ["departure", "arrival"]
+    assert len(d["deep_space_manoeuvres"]) == 1
+
+
 def test_bad_input_is_a_tool_error_not_a_crash(session):
     is_error, text = session["bad_date"]
     assert is_error and "cannot parse date" in text
@@ -159,6 +170,6 @@ def test_outputs_are_four_significant_figures(session):
                 check(v, path)
         elif isinstance(obj, float) and obj != 0:
             assert float(f"{obj:.4g}") == obj, f"{path} = {obj!r} is not 4 s.f."
-    for key in ("transfer", "window", "propagate", "budget", "flyby", "equatorial", "hohmann", "opps"):
+    for key in ("transfer", "window", "propagate", "budget", "flyby", "equatorial", "hohmann", "opps", "dsm"):
         check(session[key], key)
     json.dumps(session["flyby"])  # serialisable

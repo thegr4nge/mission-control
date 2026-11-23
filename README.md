@@ -19,8 +19,8 @@ Physics is [pykep](https://esa.github.io/pykep/) (ESA Advanced Concepts Team). L
 
 | Path | What it does |
 |---|---|
-| `physics/` | Lambert transfers, launch-window search, Kepler propagation, Hohmann transfers, Δv budgets, gravity-assist sequences, and the geometry for the 3D view |
-| `mcp_server/` | The physics as MCP tools: `next_launch_opportunities`, `find_launch_window`, `solve_transfer`, `propose_flyby_sequence`, `propagate`, `hohmann_transfer`, `check_delta_v_budget`. Each result is also pushed to the browser |
+| `physics/` | Lambert transfers, launch-window search, Kepler propagation, Hohmann transfers, Δv budgets, gravity-assist sequences, deep-space manoeuvres (MGA-1DSM), and the geometry for the 3D view |
+| `mcp_server/` | The physics as MCP tools: `next_launch_opportunities`, `find_launch_window`, `solve_transfer`, `propose_flyby_sequence`, `design_dsm_trajectory`, `propagate`, `hohmann_transfer`, `check_delta_v_budget`. Each result is also pushed to the browser |
 | `bridge/` | Loopback-only server for the web app and a websocket relay |
 | `web/` | three.js scene with a time slider, porkchop plot, mission log and crew chat |
 | `agents/` | Crew roles (flight director, navigator, propulsion), one model adapter for free-tier models, and the tool-calling loop |
@@ -92,11 +92,16 @@ Every reference names its source in `physics/references.py`, with a note on how 
 | Hohmann transfer | closed-form vis-viva; Vallado Ex. 6-1 † | exact; all 7 recalled digits |
 | Gravity assist, inner | Mariner 10, NASA NSSDCA 1973-085A | Venus flyby free (1e-5 km/s) at the flown time |
 | Gravity assist, outer | Voyager 2, NASA NSSDCA 1977-076A | Jupiter, Saturn and Uranus flybys need under 2 % of v∞ on the flown days; Saturn moved by 60 days costs 2.7-11 % |
+| Deep-space manoeuvres (MGA-1DSM) | ESA GTOP Cassini2 best, Schlueter et al. 2009 (MIDACO), scored on GTOP's own planet model (`physics/gtop.py`) | 8.385 against 8.383 km/s published |
+| DSM optimiser | Earth to Mars 2028 with one DSM allowed against the Lambert optimum | same 5.884 km/s, DSM 0 |
 | Rocket equation | Tsiolkovsky, g0 = 9.80665 m/s² | exact |
 
 † Recalled from the book, not yet checked against the printed page. pykep matches every recalled digit,
 which rules out a garbled memory but not a wrong example number.
 
 **Model limits.** The model is patched conics with impulsive burns, single-revolution Lambert arcs,
-and flybys as an instant turn of v∞. There are no deep-space manoeuvres and no low thrust.
+and flybys as an instant turn of v∞. Deep-space manoeuvres use pykep's MGA-1DSM (one burn per leg);
+its optimiser is stochastic, repeated runs on a 2-flyby route differ by up to about 15 %, and with
+4 or more flybys it often misses the best route (it does not find the 8.383 km/s Cassini2 solution
+from scratch). No low thrust.
 `jpl_lp` ephemerides cover 1800-2050; `de440s` covers 1849-2150.

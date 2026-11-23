@@ -32,7 +32,7 @@ REPO = Path(__file__).resolve().parents[1]
 MISSIONS = REPO / "missions"
 
 NAVIGATOR_TOOLS = ("next_launch_opportunities", "find_launch_window", "solve_transfer", "propose_flyby_sequence",
-                   "propagate", "hohmann_transfer")
+                   "design_dsm_trajectory", "propagate", "hohmann_transfer")
 PROPULSION_TOOLS = ("check_delta_v_budget", "hohmann_transfer")
 
 RULE = ("Every number you state about a trajectory, date, orbit, speed, energy or delta-v must be copied from a "

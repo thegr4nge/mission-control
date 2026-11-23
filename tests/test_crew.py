@@ -118,7 +118,7 @@ def test_crew_flies_a_mission_and_grounds_its_briefing():
         system = body["messages"][0]["content"]
         if system.startswith("You are the navigator"):
             assert names == {"next_launch_opportunities", "find_launch_window", "solve_transfer",
-                             "propose_flyby_sequence", "propagate", "hohmann_transfer"}
+                             "propose_flyby_sequence", "design_dsm_trajectory", "propagate", "hohmann_transfer"}
         elif system.startswith("You are the flight director"):
             assert names == set()
         for msg in body["messages"]:

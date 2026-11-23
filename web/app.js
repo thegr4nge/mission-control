@@ -228,6 +228,7 @@ function legend() {
 function title(ev) {
   const r = ev.result || {};
   if (ev.kind === "propose_flyby_sequence" && r.ranked && r.ranked[0]) return r.ranked[0].sequence.join(" → ");
+  if (ev.kind === "design_dsm_trajectory" && r.sequence) return `${r.sequence.join(" → ")} with deep-space burns`;
   if (ev.kind === "next_launch_opportunities" && r.opportunities && r.opportunities[0])
     return `${r.origin} → ${r.destination}: next window ${String(r.opportunities[0].best_c3.departure_utc).slice(0, 10)}`;
   if (r.origin) return `${r.origin} → ${r.destination}, departing ${String(r.departure_utc).slice(0, 10)}`;
@@ -246,6 +247,12 @@ function facts(ev) {
         f("v∞ arr", r.vinf_arrival_km_s, "km/s"), f("Δv total", r.dv_total_km_s, "km/s"));
     case "propose_flyby_sequence":
       return (r.ranked || []).map((s, i) => `${i + 1}. ${esc(s.sequence.join("→"))}: Δv ${esc(sf4(s.dv_total_km_s))} km/s, C3 ${esc(sf4(s.c3_km2_s2))} km²/s²`).join("<br>");
+    case "design_dsm_trajectory":
+      return join(f("Δv total", r.dv_total_km_s, "km/s"), f("of which DSMs", r.dv_deep_space_total_km_s, "km/s"),
+        f("C3", r.c3_km2_s2, "km²/s²"), f("TOF", r.time_of_flight_days, "d")) + "<br>" +
+        (r.encounters || []).map((e) => `${esc(e.role)} ${esc(e.body)} ${esc(String(e.date_utc).slice(0, 10))}, ` +
+          `v∞ ${esc(sf4(e.vinf_km_s))} km/s` + (e.periapsis_altitude_km != null ? `, periapsis ${esc(sf4(e.periapsis_altitude_km))} km` : "")).join("<br>") +
+        "<br>" + (r.deep_space_manoeuvres || []).map((m) => `DSM leg ${esc(m.leg)} ${esc(String(m.date_utc).slice(0, 10))}: ${esc(sf4(m.dv_km_s))} km/s`).join("<br>");
     case "next_launch_opportunities":
       return (r.opportunities || []).map((o, i) => {
         const b = o.best_c3 || {};

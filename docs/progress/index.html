@@ -62,7 +62,7 @@
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">Progress · updated 23 Nov 2026</div>
+    <div class="eyebrow">Progress · updated 24 Nov 2026</div>
     <h1>Mission Control</h1>
     <p class="lede">A browser 3D solar system on real orbital mechanics. An AI crew designs missions from a
       plain-English goal and briefs you on what it tried. Agents orchestrate, pykep computes, and every number
@@ -70,11 +70,11 @@
   </header>
 
   <section class="stats" aria-label="At a glance">
-    <div class="stat"><b>102</b><span>tests passing</span></div>
-    <div class="stat"><b>7</b><span>physics tools (MCP)</span></div>
-    <div class="stat"><b>10</b><span>reference checks, all passing</span></div>
+    <div class="stat"><b>119</b><span>tests passing</span></div>
+    <div class="stat"><b>8</b><span>physics tools (MCP)</span></div>
+    <div class="stat"><b>12</b><span>reference checks, all passing</span></div>
     <div class="stat"><b>3</b><span>models scored on 10 tasks</span></div>
-    <div class="stat"><b>v0 + v1</b><span>built; v2 next</span></div>
+    <div class="stat"><b>v0 + v1</b><span>built; v2 under way</span></div>
   </section>
 
   <section>
@@ -92,7 +92,7 @@
         <h3>v0 <span class="pill done">done</span></h3>
         <ol>
           <li><span class="pill done">done</span><span class="li-text">pykep stack proven<small>Lambert against Curtis and Vallado; NASA Earth-Mars transfers within 0.10 %</small></span></li>
-          <li><span class="pill done">done</span><span class="li-text">MCP physics server<small>7 tools; also registered in Claude Desktop</small></span></li>
+          <li><span class="pill done">done</span><span class="li-text">MCP physics server<small>now 8 tools; also registered in Claude Desktop</small></span></li>
           <li><span class="pill done">done</span><span class="li-text">Eval, 10 tasks<small>Claude, Groq and Gemini scored</small></span></li>
           <li><span class="pill done">done</span><span class="li-text">3D front end and websocket bridge<small>time slider, porkchop, mission log, crew chat</small></span></li>
           <li><span class="pill done">done</span><span class="li-text">Crew agents and demo video<small>director, navigator, propulsion; every report grounding-checked</small></span></li>
@@ -107,9 +107,9 @@
         </ol>
       </div>
       <div class="phase">
-        <h3>v2 <span class="pill next">next</span></h3>
+        <h3>v2 <span class="pill next">in progress</span></h3>
         <ol>
-          <li><span class="pill next">started</span><span class="li-text">Deep-space manoeuvres (MGA-1DSM)<small>pykep's model is in place and the reference found: GTOP Cassini2, best 8.383 km/s. Its published solution doesn't reproduce yet (12.4 km/s): one frame convention still differs. Needed before the tool can be trusted.</small></span></li>
+          <li><span class="pill done">done</span><span class="li-text">Deep-space manoeuvres (MGA-1DSM)<small>Verified: GTOP Cassini2 best gives 8.385 km/s against 8.383 published, on GTOP's own ephemeris. New tool design_dsm_trajectory, drawn in 3D. Optimiser is reliable to about 2 flybys; with 4 or more it misses the best route.</small></span></li>
           <li><span class="pill later">later</span><span class="li-text">Full crew<small>more roles, cross-checks between them</small></span></li>
           <li><span class="pill later">later</span><span class="li-text">Score against a past GTOC problem<small>a published competition problem with known best answers</small></span></li>
         </ol>
@@ -145,6 +145,8 @@
         <tr><td>Hohmann</td><td>vis-viva; Vallado Ex. 6-1 †</td><td class="num">exact</td></tr>
         <tr><td>Venus gravity assist</td><td>Mariner 10, NSSDCA 1973-085A</td><td class="num">1e-5 km/s</td></tr>
         <tr><td>Outer-planet assists</td><td>Voyager 2, NSSDCA 1977-076A</td><td class="num">≤ 1.6 % of v∞</td></tr>
+        <tr><td>Deep-space manoeuvres</td><td>ESA GTOP Cassini2 best (8.383 km/s), on GTOP's own ephemeris</td><td class="num">8.385</td></tr>
+        <tr><td>DSM optimiser</td><td>Earth-Mars 2028 against the Lambert optimum</td><td class="num">5.884, DSM 0</td></tr>
         <tr><td>Rocket equation</td><td>Tsiolkovsky, g0 = 9.80665</td><td class="num">exact</td></tr>
       </tbody>
     </table></div>

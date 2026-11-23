@@ -19,6 +19,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from physics.bodies import PLANETS, to_iso, to_mjd2000
 from physics.budget import check_budget
+from physics.dsm import coast_points_au, optimise_dsm
 from physics.flyby import candidate_sequences, default_flyby_candidates, optimise_sequence
 from physics.hohmann import hohmann
 from physics.visual import planet_tracks, transfer_path
@@ -436,6 +437,69 @@ def propose_flyby_sequence(
     top = results[0]
     publish("propose_flyby_sequence", out,
             lambda: scene(list(top.bodies), [e.mjd2000 for e in top.encounters]))
+    return out
+
+
+@server.tool(structured_output=True, title="Design deep-space-manoeuvre trajectory")
+@user_errors
+def design_dsm_trajectory(
+    sequence: list[Planet],
+    earliest_departure: str,
+    latest_departure: str,
+    arrival: Literal["capture", "flyby", "rendezvous"] = "capture",
+    min_launch_vinf_km_s: float = 0.5,
+    max_launch_vinf_km_s: float = 12.0,
+    departure_orbit_altitude_km: float = DEFAULT_DEPARTURE_ALT_KM,
+    capture_orbit_altitude_km: float = DEFAULT_ARRIVAL_ALT_KM,
+    effort: Literal["quick", "standard", "thorough"] = "standard",
+    ephemeris: Ephemeris = "jpl_lp",
+) -> dict[str, Any]:
+    """Optimise one body sequence with one deep-space manoeuvre (DSM) per leg (pykep MGA-1DSM).
+
+    `sequence` runs from origin to destination, e.g. ["earth", "venus", "earth", "jupiter"]. Unlike
+    propose_flyby_sequence, flybys are unpowered (the planet only bends v_inf) and each leg may fire
+    one impulsive burn in deep space; this allows returns to the same planet (["earth", "earth", ...]
+    resonant legs). Total dv = burn from a circular parking orbit + all DSMs + arrival burn.
+    Effort for a 3-leg sequence: quick ~12 s, standard ~45 s, thorough ~2.5 min (best of three
+    restarts); the first call also starts a worker pool (~20 s). The search is stochastic: on a
+    2-flyby route repeated standard runs differ by up to ~15 %, so use thorough before relying on a
+    number. With 4 or more flybys it often misses the best solution.
+    """
+    if len(sequence) < 2:
+        raise ValueError("sequence needs at least an origin and a destination")
+    t0, t1 = to_mjd2000(earliest_departure), to_mjd2000(latest_departure)
+    r = optimise_dsm(sequence, t0, t1, arrival_mode=arrival,
+                     vinf_bounds_km_s=(min_launch_vinf_km_s, max_launch_vinf_km_s),
+                     departure_alt_km=departure_orbit_altitude_km, arrival_alt_km=capture_orbit_altitude_km,
+                     ephemeris=ephemeris, effort=effort)
+    out = {
+        "sequence": list(r.bodies),
+        "arrival": arrival,
+        "dv_total_km_s": sig4(r.dv_total_km_s),
+        "dv_deep_space_total_km_s": sig4(r.dsm_total_km_s),
+        "c3_km2_s2": sig4(r.c3_km2_s2),
+        "time_of_flight_days": sig4(r.tof_days),
+        "encounters": [{
+            "body": e.body,
+            "role": e.role,
+            "date_utc": to_iso(e.mjd2000),
+            "vinf_km_s": sig4(e.vinf_km_s),
+            "dv_km_s": sig4(e.dv_km_s),
+            **({"periapsis_altitude_km": sig4(e.periapsis_altitude_km)} if e.periapsis_altitude_km is not None else {}),
+        } for e in r.encounters],
+        "deep_space_manoeuvres": [{"leg": m.leg, "date_utc": to_iso(m.mjd2000), "dv_km_s": sig4(m.dv_km_s)}
+                                  for m in r.manoeuvres],
+        "ephemeris": ephemeris,
+        "model": ("MGA-1DSM (pykep trajopt.mga_1dsm): coast, one impulsive deep-space burn, then a prograde "
+                  "single-revolution Lambert arc per leg; unpowered flybys no lower than pykep's safe radius. "
+                  "Verified against ESA GTOP Cassini2 (8.385 vs published 8.383 km/s). Optimiser is "
+                  "stochastic (self-adaptive DE + basin hopping): best found, not proven optimal. "
+                  "Dates are UTC as pykep epochs (no leap seconds)."),
+    }
+    publish("design_dsm_trajectory", out,
+            lambda: {"legs": coast_points_au(r),
+                     "tracks": planet_tracks(PLANETS, r.encounters[0].mjd2000, r.encounters[-1].mjd2000,
+                                             ephemeris=ephemeris)})
     return out
 
 
